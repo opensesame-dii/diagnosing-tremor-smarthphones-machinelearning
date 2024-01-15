@@ -195,10 +195,10 @@ def butter_lowpass_filter(data, cutoff, fs, order):
 
 
 #Analyze time-series to calculate various metrics, such as the TSI (Tremor Stability Index, see paper) using below function
-def timeseries_analysis(file, new_path, display_tremor,setFreqRange):
+def timeseries_analysis(file_path, display_tremor,setFreqRange):
     #Function takes the tremor file name and path as input, and then opens the file in the next lines of code
-    os.chdir(new_path)
-    f = open(file)
+    f = open(file_path)
+
     
     #Ignores the first 10 lines of code, which do not contain any data
     for i in range(10):
@@ -469,10 +469,8 @@ def timeseries_analysis(file, new_path, display_tremor,setFreqRange):
 
 #######################
 #Function to conduct frequency-power spectrum analysis on each file
-def freq_analysis(file, new_path):
-    os.chdir(new_path)
-    f = open(file)
-    line = f.readline()
+def freq_analysis(file_path):
+    f = open(file_path)
     
     peak_slope = 0.5
     min_pow = 0.02
