@@ -2,7 +2,8 @@ import pandas as pd
 import glob
 import os
 import datetime
-
+import numpy as np
+import numpy.fft as fft
 
 def convert(input_file,converted_file):
 
@@ -25,6 +26,59 @@ def convert(input_file,converted_file):
 
     #csv ファイル出力
     df3.to_csv(converted_file, float_format = "",header = True, index = False, encoding = "utf-8")
+    
+    f = open(converted_file)
+
+    for i in range(10):
+        line = f.readline()
+    
+    sample_rate = 50
+    
+    line = f.readline()
+
+    t = []
+    x = []
+    y = []
+    z = []
+        
+    while line != "":
+        line = f.readline()
+        line = line.strip()
+        line_list = line.strip().split(",")
+        line_len = len(line_list)
+        if line == "" or line_len < 4:
+            break
+        
+        #Obtains the current time and position and stores them in the corresponding arrays
+        t_cur = float(line_list[0])
+        x_cur = float(line_list[1])
+        y_cur = float(line_list[2])
+        z_cur = float(line_list[3])
+        t.append(t_cur)
+        x.append(x_cur)
+        y.append(y_cur)
+        z.append(z_cur)
+    f.close()
+    
+    x = np.array(x)
+    y = np.array(y)
+    z = np.array(z)
+    x_trend_removed = x - np.mean(x)
+    y_trend_removed = y - np.mean(y)
+    z_trend_removed = z - np.mean(z)
+
+    x_fft = fft.fft(x_trend_removed * np.hamming(len(x)))
+    y_fft = fft.fft(y_trend_removed * np.hamming(len(x)))
+    z_fft = fft.fft(z_trend_removed * np.hamming(len(x)))
+    x_fft = np.abs(x_fft)
+    y_fft = np.abs(y_fft)
+    z_fft = np.abs(z_fft)
+    freq_fft = fft.fftfreq(len(x_fft), 1/sample_rate)
+
+    with open(converted_file,"a") as f:
+        f.write("\n\nfrequency, x_fft, y_fft, z_fft \n")
+        for i in range(len(x_fft)//2):
+            f.write(f"{freq_fft[i]}, {x_fft[i]}, {y_fft[i]}, {z_fft[i]}\n")
 
 
 def convert_all_in_dir(input_dir, output_dir):
