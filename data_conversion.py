@@ -42,13 +42,21 @@ def convert_all_in_dir(input_dir, output_dir):
         os.mkdir(new_dir)
 
         # {input_dir}/{f} の中のcsvを全て取得する
-        csv_files = glob.glob('*.csv', root_dir = os.path.join(input_dir, f))
+        csv_files = search_csv(os.path.join(input_dir, f))
         print(csv_files)
         # ↑のそれぞれをconvertする
         for files in csv_files:
             convert(os.path.join(input_dir,f,files), os.path.join(new_dir, files))
 
     return
+
+def search_csv(rootdir):
+    file_list = []
+    for root, directories, files in os.walk(rootdir):
+        for file in files:
+            if(file.endswith(".csv")):
+                file_list.append(file)
+    return file_list
 
 if __name__ == "__main__":
     input_dir = os.path.join("var", "data-YYYYMMDDhhmm")
