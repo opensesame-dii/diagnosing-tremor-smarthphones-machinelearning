@@ -33,29 +33,6 @@ import io
 import pickle
 import pprint
 
-#PATH refers to the folder path where both this file, the required input .csv metadata file (the metadata file containing the list of all patient data (patient initials/labels, age, sex etc)) and the tremor accelerometer data files for each patient (containing raw unprocessed accelerometer data) are stored
-#Note: user must set PATH according to where this file and required .csv files are stored on their computer
-PATH = "/Users/rambalachandar/Desktop/University of Toronto/Fasano Lab/Actual data files"
-os.chdir(PATH)
-
-#The four positions that tremor is recorded in each patient (see methods section of the paper)
-tremor_types = ["bat","kin","out","rest"]
-
-#Open metadata file containing all basic non-identifying patient information (i.e. initials, diagnosis, age, etc.)
-metadata = open('data_metadata_updated.csv')
-heading = metadata.readline().strip("\n").split(",") #first row of the metadata file, containing headings for each column (e.g. name, diagnosis, etc.)
-
-#All patient information from the metadata file is stored in arrays, defined below
-dates_all = []
-dates = []
-names = []
-ages = []
-MRNs = []
-hands = []
-file_names = []
-diagnoses = []
-basic_diagnoses = []
-comments = []
 
 #Average and standard-dev functions
 def ave(lst):
@@ -338,8 +315,8 @@ def timeseries_analysis(file, new_path, display_tremor,setFreqRange):
         if freq_max <= freq_high and freq_max >= freq_low:
             break
         else:
-            spectrum2 = numpy.delete(spectrum2,idx)
-            freq_fft2 = numpy.delete(freq_fft2,idx)
+            spectrum2 = np.delete(spectrum2,idx)
+            freq_fft2 = np.delete(freq_fft2,idx)
             c = c + 1
         
     
@@ -449,12 +426,12 @@ def timeseries_analysis(file, new_path, display_tremor,setFreqRange):
     #Calculate the TSI index, defined as the interquartile range of the set of instantaneous changes in frequency
     TSI = 0
     if len(delta_fs) > 0:
-        fr = numpy.array(delta_fs)
-        TSI = (numpy.percentile(fr, 75) - numpy.percentile(fr, 25)).item()
+        fr = np.array(delta_fs)
+        TSI = (np.percentile(fr, 75) - np.percentile(fr, 25)).item()
     
     TSI_peakPow = 0
-    fs = numpy.array(peak_power)
-    TSI_peakPow = (numpy.percentile(fs, 75) - numpy.percentile(fs, 25)).item()
+    fs = np.array(peak_power)
+    TSI_peakPow = (np.percentile(fs, 75) - np.percentile(fs, 25)).item()
     
     peakPowAve = average(peak_power)
     peakPowStd = stddev(peak_power,peakPowAve)
@@ -831,1295 +808,1321 @@ def freq_analysis(file, new_path):
     return [freqs,peaksX_ref,peaksY_ref,peaksZ_ref,peaksU_ref,aves,harms,maxpowers,harm_pow,RPC,area_0_fend]
     
 
-'''
-###########   Main Program: begins parsing files in metadata file #########
-'''
-for ln in metadata:
-    line = ln.strip("\n").split(",")
-    
-    date = line[0]
-    if date.strip()=="":
-        dates_all.append(dates[-1].lower())
-    else:
-        dates.append(line[0].lower())
-        dates_all.append(line[0].lower())
-    names.append(line[1])
-    ages.append(line[2])
-    MRNs.append(line[3])
-    hands.append(line[4])
-    file_names.append(line[5])
-    basic_diagnoses.append(line[6])
-    diagnoses.append(line[7])
-    comments.append(line[8])
-
-#Time-series analysis lists
-instAveFreq_list = {}
-instAvePow_list = {}
-instStdPow_list = {}
-TSI_list = {}
-TSI_ppow_list = {}
-instTSIppow_AvePow_ratio_list = {}
-instPow_Std_Ave_ratio_list = {}
-    
-#Frequency analysis lists
-freq_list = {} #Main peaks
-freq_list_control = [[],[],[],[]] #Main peaks for control
-mpow_list = {} #power of the main peaks
-mpow_list_control = [[],[],[],[]]
-peakX_list = {}
-peakX_list_control = [[],[],[],[]]
-peakY_list = {}
-peakY_list_control = [[],[],[],[]]
-peakZ_list = {}
-peakZ_list_control = [[],[],[],[]]
-peakU_list = {}
-peakU_list_control = [[],[],[],[]]
-
-#split freq into X,Y,Z & U, since sometimes even though peak in some axes, other axes may not have peak; to prevent addign 0 into the average, split into axes
-freqX_list = {}
-freqY_list = {}
-freqZ_list = {}
-freqU_list = {}
-
-harm_list = {} #harmonics
-harm_pow_list = {} #harmonic power
-harm_list_control = [[],[],[],[]] #harmonics for control
-
-RPC_list = {} #Relative Power Contribution to the first harmonic (RPC)
-
-RE_bat_list = {} #for relative energy calculations, using either bat or out
-RE_out_list = {}
-bat_totArea = [1,1,1,1] #initialize totArea lists used for RE calculations
-out_totArea = [1,1,1,1]
-rest_totArea = [1,1,1,1]
-
-basic_diagnoses_nums = {}
-basic_diagnoses_nums["control"] = 0
-numPD = 0
-
-max_outputX = [0,0,0,0] #max num of peaksX seen in any file, for each tremor type
-max_outputY = [0,0,0,0] #maximum number of peaksY seen in any file
-max_outputZ = [0,0,0,0] #maximum number of peaksZ seen in any file
-max_outputU = [0,0,0,0]
-
-finished_one = False #used to make sure only one plot of signal is done
-
-num_not_accounted = 0 #num of patients who don't meet criteria for being analyzed in freq-spectra
-names_not_accounted = [] #names of patients who don't meet criteria for being analyzed in freq-spectra
-
-#Cumulative Data File
-allDataFile = open("AllAnalysisData.csv","w+")
-allDataFile.write("Name,Date,Diagnosis (basic),")
-for tremor in tremor_types:
-    allDataFile.write("Mean Inst. Freq_"+tremor+",TSI_"+tremor+",TSI_amplitude_"+tremor+",Mean Peak Amplitude_"+tremor+",Stddev Peak Amplitude_+"+tremor+",TSI_amplitude to MeanPeakAmplitude ratio_"+tremor+",StddevPeakAmplitude to MeanPeakAmplitude ratio_"+tremor+",")
-    allDataFile.write("Peak Freq_X_"+tremor+",Peak Freq_Y_"+tremor+",Peak Freq_Z_"+tremor+",Peak Freq_U_"+tremor+",Peak Power_X_"+tremor+",Peak Power_Y_"+tremor+",Peak Power_Z_"+tremor+",Peak Power_U_"+tremor+",Harmonic Present_X_"+tremor+",Harmonic Present_Y_"+tremor+",Harmonic Present_Z_"+tremor+",Harmonic Present_U_"+tremor+",Harmonic Power_X_"+tremor+",Harmonic Power_Y_"+tremor+",Harmonic Power_Z_"+tremor+",Harmonic Power_U_"+tremor+",RPC_X_"+tremor+",RPC_Y_"+tremor+",RPC_Z_"+tremor+",RPC_U_"+tremor+",")
-allDataFile.write("RE_bat,RE_out\n")
-
-#Data file with only files that match the inclusion criterias
-allDataFile_timeseries = open("AllAnalysisData_timeseries.csv","w+")
-allDataFile_timeseries.write("Name,Date,Diagnosis (basic),")
-for tremor in tremor_types:
-    allDataFile_timeseries.write("Mean Inst. Freq_"+tremor+",TSI_"+tremor+",TSI_amplitude_"+tremor+",Mean Peak Amplitude_"+tremor+",Stddev Peak Amplitude_+"+tremor+",TSI_amplitude to MeanPeakAmplitude ratio_"+tremor+",StddevPeakAmplitude to MeanPeakAmplitude ratio_"+tremor+",")
-allDataFile_timeseries.write("\n")
-
-allDataFile_freqspec = open("AllAnalysisData_freqspectra.csv","w+")
-allDataFile_freqspec.write("Name,Date,Diagnosis (basic),")
-for tremor in tremor_types:
-    allDataFile_freqspec.write("Peak Freq_X_"+tremor+",Peak Freq_Y_"+tremor+",Peak Freq_Z_"+tremor+",Peak Freq_U_"+tremor+",Peak Power_X_"+tremor+",Peak Power_Y_"+tremor+",Peak Power_Z_"+tremor+",Peak Power_U_"+tremor+",Harmonic Present_X_"+tremor+",Harmonic Present_Y_"+tremor+",Harmonic Present_Z_"+tremor+",Harmonic Present_U_"+tremor+",Harmonic Power_X_"+tremor+",Harmonic Power_Y_"+tremor+",Harmonic Power_Z_"+tremor+",Harmonic Power_U_"+tremor+",RPC_X_"+tremor+",RPC_Y_"+tremor+",RPC_Z_"+tremor+",RPC_U_"+tremor+",")
-allDataFile_freqspec.write("RE_bat,RE_out\n")
-
-for i in range(len(names)):
-    date = dates_all[i]
-    name = names[i]
-    basic_diagnosis = basic_diagnoses[i]
-    
-    MRN = MRNs[i]
-    if name=="?":
-        name = ""
-    
-    if MRN == "control":
-        basic_diagnoses_nums["control"] = basic_diagnoses_nums["control"] + 1
-    
-    if basic_diagnosis not in freq_list:
-        if MRN != "control":
-            #Time analysis
-            instAveFreq_list[basic_diagnosis] = [[],[],[],[]]
-            instAvePow_list[basic_diagnosis] = [[],[],[],[]] #Ave Peak Pow
-            instStdPow_list[basic_diagnosis] = [[],[],[],[]]
-            TSI_list[basic_diagnosis] = [[],[],[],[]]
-            TSI_ppow_list[basic_diagnosis] = [[],[],[],[]]
-            instTSIppow_AvePow_ratio_list[basic_diagnosis] = [[],[],[],[]]
-            instPow_Std_Ave_ratio_list[basic_diagnosis] = [[],[],[],[]]
-            
-            #Freq analysis
-            freq_list[basic_diagnosis] = [[],[],[],[]] #main freq
-            mpow_list[basic_diagnosis] = [[],[],[],[]] #mpow of main peak
-            harm_list[basic_diagnosis] = [[],[],[],[]] #harmonics
-            harm_pow_list[basic_diagnosis] = [[],[],[],[]] #harmonics powers
-            peakX_list[basic_diagnosis] = [[],[],[],[]]
-            peakY_list[basic_diagnosis] = [[],[],[],[]]
-            peakZ_list[basic_diagnosis] = [[],[],[],[]]
-            peakU_list[basic_diagnosis] = [[],[],[],[]]
-            
-            RPC_list[basic_diagnosis] = [[],[],[],[]]
-            RE_bat_list[basic_diagnosis] = []
-            RE_out_list[basic_diagnosis] = []
-            
-            freqX_list[basic_diagnosis] = [[],[],[],[]]
-            freqY_list[basic_diagnosis] = [[],[],[],[]]
-            freqZ_list[basic_diagnosis] = [[],[],[],[]]
-            freqU_list[basic_diagnosis] = [[],[],[],[]]
-            
-            basic_diagnoses_nums[basic_diagnosis] = 1 #Track number of patients of each diagnosis
-    else:
-        if MRN != "control":
-            basic_diagnoses_nums[basic_diagnosis] = basic_diagnoses_nums[basic_diagnosis] + 1
-    
-    noTSIforFile = False #if even one of the tremors for a given patient have TSI or TSI_ppow thats less than threshold values, don't consider this patient
-    
-    for j in range(len(tremor_types)):
-        tremor = tremor_types[j]
-        new_path = PATH + "/" + dates_all[i] + "/" + name + "/"+ tremor
-        os.chdir(new_path)
+if __name__ == "__main__":
         
-        cmd = "ls *.csv"
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=None, shell=True)
-        output = process.communicate()
-        file = (str(output[0])).lstrip("b").strip("'").strip("\\n").strip()
-        if file[0] == 'f' and file[1] == '_':
-            continue
+    '''
+    ###########   Main Program: begins parsing files in metadata file #########
+    '''
+    #PATH refers to the folder path where both this file, the required input .csv metadata file (the metadata file containing the list of all patient data (patient initials/labels, age, sex etc)) and the tremor accelerometer data files for each patient (containing raw unprocessed accelerometer data) are stored
+    #Note: user must set PATH according to where this file and required .csv files are stored on their computer
+    PATH = "/Users/rambalachandar/Desktop/University of Toronto/Fasano Lab/Actual data files"
+    os.chdir(PATH)
+
+    #The four positions that tremor is recorded in each patient (see methods section of the paper)
+    tremor_types = ["bat","kin","out","rest"]
+
+    #Open metadata file containing all basic non-identifying patient information (i.e. initials, diagnosis, age, etc.)
+    metadata = open('data_metadata_updated.csv')
+    heading = metadata.readline().strip("\n").split(",") #first row of the metadata file, containing headings for each column (e.g. name, diagnosis, etc.)
+
+    #All patient information from the metadata file is stored in arrays, defined below
+    dates_all = []
+    dates = []
+    names = []
+    ages = []
+    MRNs = []
+    hands = []
+    file_names = []
+    diagnoses = []
+    basic_diagnoses = []
+    comments = []
+
+    for ln in metadata:
+        line = ln.strip("\n").split(",")
         
-        #Analysis-function outputs:
-        #******
-        analysis_output = freq_analysis(file, new_path) #Freq analysis
-        display_plot = False
-        setFreqRange = False #only set to true if OT, since don't want to restrict freq to 2-9Hz in proecessing
-        if basic_diagnosis == 'Orthostatic tremor':
-            setFreqRange =  True
-        
-        # if tremor == 'rest' and basic_diagnosis == 'Dystonic tremor':# and finished_one == False:
-        #     print(name)
-        #     display_plot = True
-        #     finished_one = True
-        
-        timeseries_output = timeseries_analysis(file, new_path, display_plot,setFreqRange) #timeseries analysis
-        #******
-        
-        if j==0:
-            bat_RE_present = False
-            out_RE_present = False
-            rest_RE_present = False
-        
-        #Time-series analysis
-        f_inst = timeseries_output[0]
-        df_inst = timeseries_output[1]
-        f_c = timeseries_output[2]
-        #f_median = timeseries_output[3]
-        TSI = timeseries_output[3]
-        sig_trans = timeseries_output[4]
-        zero_cross = timeseries_output[5]
-        tim = timeseries_output[6]
-        TSI_ppow = timeseries_output[7]
-        peakPowers = timeseries_output[8]
-        peakPowAve = timeseries_output[9]
-        peakPowStd = timeseries_output[10]
-        maxPow = timeseries_output[11]
-        minPow = timeseries_output[12]
-        
-        #to normalize these amplitude-related values to the ave. peak power
-        TSIppow_AvePow_ratio = TSI_ppow/peakPowAve
-        peakPow_Std_Ave_ratio = peakPowStd/peakPowAve
-        
-        #if any of the TSI values is less than threshold, don't consider this patient by deleting the TSI values form cumulative list afterwards
-        if TSI < 0.1 or TSI_ppow < 0.001:
-            noTSIforFile = True
-            if MRN!="control":
-                if j==0:
-                    allDataFile_timeseries.write(name + "," + date + "," + basic_diagnosis + ",")
-                allDataFile_timeseries.write(",,,,,,,")
+        date = line[0]
+        if date.strip()=="":
+            dates_all.append(dates[-1].lower())
         else:
-            #only write data that meets inclusion criteria to 'timeseries' file
-            if MRN!="control":
-                if j==0:
-                    allDataFile_timeseries.write(name + "," + date + "," + basic_diagnosis + ",")
-                allDataFile_timeseries.write(str(f_c) + "," + str(TSI) + "," + str(TSI_ppow) + "," + str(peakPowAve) + "," + str(peakPowStd) + "," + str(TSIppow_AvePow_ratio) + "," + str(peakPow_Std_Ave_ratio)+",")
-         
-        
-        if MRN != "control":
-            instAveFreq_list[basic_diagnosis][j].append(f_c)
-            TSI_list[basic_diagnosis][j].append(TSI)
-            TSI_ppow_list[basic_diagnosis][j].append(TSI_ppow)
-            instAvePow_list[basic_diagnosis][j].append(peakPowAve)
-            instStdPow_list[basic_diagnosis][j].append(peakPowStd)
-            instTSIppow_AvePow_ratio_list[basic_diagnosis][j].append(TSIppow_AvePow_ratio)
-            instPow_Std_Ave_ratio_list[basic_diagnosis][j].append(peakPow_Std_Ave_ratio)
-        
-        #write data to AllDataFile
-        #Write patient info to cumulative data file
-        if j==0:
-            if MRN=="control":
-                allDataFile.write(name + "," + date + "," + MRN + ",")
-            else:
-                allDataFile.write(name + "," + date + "," + basic_diagnosis + ",")
-        allDataFile.write(str(f_c) + "," + str(TSI) + "," + str(TSI_ppow) + "," + str(peakPowAve) + "," + str(peakPowStd) + "," + str(TSIppow_AvePow_ratio) + "," + str(peakPow_Std_Ave_ratio)+",")
-        
-        #Save f-df data for all dystonic tremor files
-        #if basic_diagnosis == 'Dystonic tremor':
-        with open("f_df_"+basic_diagnosis+str(basic_diagnoses_nums[basic_diagnosis])+"_"+tremor+".csv","w") as o:
-            o.write("TSI,"+str(TSI)+"\n")
-            o.write("f_c,"+str(f_c)+"\n")
-            o.write("TSI_amplitude,"+str(TSI_ppow)+"\n")
-            o.write("Ave inst. ampl,"+ str(peakPowAve) +"\n")
-            o.write("Std of inst. ampl," + str(peakPowStd) +"\n")
-            o.write("Max peak pow," + str(maxPow) + "\n")
-            o.write("Min peak pow," + str(minPow) + "\n")
-            #o.write("f_mean,"+str(f_c)+"\n")
-            #o.write("f_median,"+str(f_median)+"\n")
-            o.write("f,df\n")
-            for k in range(len(df_inst)):
-                o.write(str(f_inst[k])+","+str(df_inst[k])+"\n")
-            
-            #if display_plot == True:
-            o.write("\n\n")
-            o.write("Signal after Filters\n")
-            for k in range(len(sig_trans)):
-                o.write(str(tim[k])+","+str(sig_trans[k])+"\n")
-            
-            o.write("\n")
-            o.write("Zero crossings\n")
-            for k in range(len(zero_cross)):
-                o.write(str(zero_cross[k])+"\n")
-            o.close()
-            
-        
-        #Freq analysis:
-        th = 0
-        #if basic_diagnosis == 'ET':
-            # if len(analysis_output[4]) > 0:
-            #     print(name,tremor)
-            #     print(analysis_output[4][0][5])
-            #     print(analysis_output[4][0])
-            #     print("\n")
-        
-        # if name == 'AG' and tremor == 'bat':
-        #     print(analysis_output[0])
-        #     print(len(analysis_output[3]))
-        #     print(analysis_output[3])
-        #     print("")
-        #     print(analysis_output[9])
-        #     print("")
-            
-        if len(analysis_output[4]) > 0:
-            th = analysis_output[4][0][5]
-        # if th > 2: #i==18 and j==1:#i==24 and j==1: #JS = 32
-        #     print(analysis_output[4][0])
-        #     print(name,tremor)
-        #     print(analysis_output[6],'\n')
-        #     print(analysis_output[1],'\n')
-        #     print(analysis_output[2],'\n')
-        #     print(analysis_output[3],'\n')
-        #     print(analysis_output[4],'\n')
-        #     os.chdir(PATH)
-        #     with open("file1.csv","w") as o:
-        #         o.write("p1X,p2X,pmaxX,powmaxX,pIntegX\n")
-        #         tmp = analysis_output[1]
-        #         for k in range(len(tmp)):
-        #             o.write(str(tmp[k][0])+","+str(tmp[k][1])+","+str(tmp[k][2])+","+str(tmp[k][3])+","+str(tmp[k][4])+"\n")
-        
-        if MRN == "control":
-            freq_list_control[j].append(analysis_output[0])
-            harm_list_control[j].append(analysis_output[6])
-            peakX_list_control[j].append(analysis_output[1])
-            peakY_list_control[j].append(analysis_output[2])
-            peakZ_list_control[j].append(analysis_output[3])
-            peakU_list_control[j].append(analysis_output[4])
-            mpow_list_control[j].append(analysis_output[7])
-        if MRN == "control" or MRN != "control": #doing this so have control file stats calculated for AllDataFile
-            # if analysis_output[0] != [0.0,0.0,0.0,0.0]:
-            #     freq_list[basic_diagnosis][j].append(analysis_output[0])
-            #     mpow_list[basic_diagnosis][j].append(analysis_output[7])
-            # zero = 0.0
-            # if zero in analysis_output[0]:
-            #     print(name,basic_diagnosis,analysis_output[0].index(zero))
-                
-            output_X = analysis_output[1]
-            output_Y = analysis_output[2]
-            output_Z = analysis_output[3]
-            output_U = analysis_output[4]
-            
-            #Write to AllData file:
-            allDataFile.write(','.join(str(e) for e in analysis_output[0]) + "," + ','.join(str(e) for e in analysis_output[7]) + "," + ','.join(str(e) for e in analysis_output[6]) + "," + ','.join(str(e) for e in analysis_output[8]) + "," + ','.join(str(e) for e in analysis_output[9]) + ",")
-            
-            #switch to 'or' or 'and' for more strict filtering
-            #if len(output_X)>0 and len(output_Y)>0 and len(output_Z)>0 and len(output_U)>0:
-            pow_thres = 0.05 #max_power above which file must be to be considered
-            
-            #if last file for given patient, calculated 'relative energy' (RE)
-            if j==0:
-                bat_totArea = analysis_output[10]
-            elif j==2:
-                out_totArea = analysis_output[10]
-            elif j==3:
-                rest_totArea = analysis_output[10]
-                #print(str(bat_totArea[2])+"; "+str(out_totArea[2])+"; "+str(rest_totArea[2]))
-                #Use z-axis for calculation
-                
-                allDataFile.write(str(rest_totArea[2]/bat_totArea[2]) + "," + str(rest_totArea[2]/out_totArea[2]) + ",")
+            dates.append(line[0].lower())
+            dates_all.append(line[0].lower())
+        names.append(line[1])
+        ages.append(line[2])
+        MRNs.append(line[3])
+        hands.append(line[4])
+        file_names.append(line[5])
+        basic_diagnoses.append(line[6])
+        diagnoses.append(line[7])
+        comments.append(line[8])
 
-            if analysis_output[7][0] > pow_thres or analysis_output[7][1] > pow_thres or analysis_output[7][2] > pow_thres or analysis_output[7][3] > pow_thres:
-                #print(basic_diagnosis+", "+tremor+", "+name)
-                if MRN!="control":
-                    freq_list[basic_diagnosis][j].append(analysis_output[0])
-                    mpow_list[basic_diagnosis][j].append(analysis_output[7])
-                    harm_list[basic_diagnosis][j].append(analysis_output[6]) #harmonics
-                    RPC_list[basic_diagnosis][j].append(analysis_output[9])
-                    
-                    if analysis_output[8] != [0.0,0.0,0.0,0.0]:
-                        harm_pow_list[basic_diagnosis][j].append(analysis_output[8])
-                
-                    if j==0:
-                        allDataFile_freqspec.write(name + "," + date + "," + basic_diagnosis + ",")
-                        bat_RE_present = True
-                    elif j==2:
-                        out_RE_present = True
-                    elif j==3:
-                        rest_RE_present = True
-                    allDataFile_freqspec.write(','.join(str(e) for e in analysis_output[0]) + "," + ','.join(str(e) for e in analysis_output[7]) + "," + ','.join(str(e) for e in analysis_output[6]) + "," + ','.join(str(e) for e in analysis_output[8]) + "," + ','.join(str(e) for e in analysis_output[9]) + ",")
-                
-                #write RE data to file, RE_bat & RE_out
-                if j==3: #only write RE data to AllData_freqspec if on j==3
-                    rest_RE_present = True
-                    if MRN!="control":
-                        RE_bat_list[basic_diagnosis].append(rest_totArea[2]/bat_totArea[2])
-                        RE_out_list[basic_diagnosis].append(rest_totArea[2]/out_totArea[2])
-                    
-                        #allDataFile_freqspec.write(str(rest_totArea[2]/bat_totArea[2]) + "," + str(rest_totArea[2]/out_totArea[2]) + ",")
-            else:
-                #print("name: "+ name+", date: "+ date+ ", tremor: "+tremor+", diag: "+basic_diagnosis)
-                if MRN!="control":
-                    if j==0:
-                        allDataFile_freqspec.write(name + "," + date + "," + basic_diagnosis + ",")
-                    allDataFile_freqspec.write(",,,," + ",,,," + ",,,," + ",,,," + ",,,,")
-                if name not in names_not_accounted:
-                    names_not_accounted.append((name + ", " + basic_diagnosis))
-            if j==3:
-                if bat_RE_present == True and out_RE_present == True and rest_RE_present == True and MRN!="control":
-                    allDataFile_freqspec.write(str(rest_totArea[2]/bat_totArea[2]) + "," + str(rest_totArea[2]/out_totArea[2]) + ",")
-                else:
-                    if MRN!="control":
-                        allDataFile_freqspec.write(",,")
-            
-            #for each axis
-            if len(output_X)>0:
-                freqX_list[basic_diagnosis][j].append(analysis_output[0][0])
-                peakX_list[basic_diagnosis][j].append(output_X)
-            if len(output_Y)>0:
-                freqY_list[basic_diagnosis][j].append(analysis_output[0][1])
-                peakY_list[basic_diagnosis][j].append(output_Y)
-            if len(output_Z)>0:
-                freqZ_list[basic_diagnosis][j].append(analysis_output[0][2])
-                peakZ_list[basic_diagnosis][j].append(output_Z)
-            if len(output_U)>0:
-                if output_U[0][5] < 1:
-                    freqU_list[basic_diagnosis][j].append(analysis_output[0][3])
-                    peakU_list[basic_diagnosis][j].append(output_U)
-            
-            #peakX_list[basic_diagnosis][j].append(output_X)
-            #peakY_list[basic_diagnosis][j].append(output_Y)
-            #peakZ_list[basic_diagnosis][j].append(output_Z)
-            #peakU_list[basic_diagnosis][j].append(output_U)
-            
-            # if len(outputX) > max_outputX[j]:
-            #     max_outputX[j] = len(outputX)
-            # if len(outputY) > max_outputY[j]:
-            #     max_outputY[j] = len(outputY)
-            # if len(outputZ) > max_outputZ[j]:
-            #     max_outputZ[j] = len(outputZ)
-            
-    
-    #delete this patient from all cumulative TSI lists if even one of the four tremors had a TSI that didn't meet the threshold
-    if noTSIforFile == True and MRN != "control":
-        for j in range(len(tremor_types)):
-            del instAveFreq_list[basic_diagnosis][j][-1]
-            del TSI_list[basic_diagnosis][j][-1]
-            del TSI_ppow_list[basic_diagnosis][j][-1]
-            del instAvePow_list[basic_diagnosis][j][-1]
-            del instStdPow_list[basic_diagnosis][j][-1]
-            del instTSIppow_AvePow_ratio_list[basic_diagnosis][j][-1]
-            del instPow_Std_Ave_ratio_list[basic_diagnosis][j][-1]
-    
-    allDataFile.write("\n")
-    allDataFile_freqspec.write("\n")
+    #Time-series analysis lists
+    instAveFreq_list = {}
+    instAvePow_list = {}
+    instStdPow_list = {}
+    TSI_list = {}
+    TSI_ppow_list = {}
+    instTSIppow_AvePow_ratio_list = {}
+    instPow_Std_Ave_ratio_list = {}
+        
+    #Frequency analysis lists
+    freq_list = {} #Main peaks
+    freq_list_control = [[],[],[],[]] #Main peaks for control
+    mpow_list = {} #power of the main peaks
+    mpow_list_control = [[],[],[],[]]
+    peakX_list = {}
+    peakX_list_control = [[],[],[],[]]
+    peakY_list = {}
+    peakY_list_control = [[],[],[],[]]
+    peakZ_list = {}
+    peakZ_list_control = [[],[],[],[]]
+    peakU_list = {}
+    peakU_list_control = [[],[],[],[]]
+
+    #split freq into X,Y,Z & U, since sometimes even though peak in some axes, other axes may not have peak; to prevent addign 0 into the average, split into axes
+    freqX_list = {}
+    freqY_list = {}
+    freqZ_list = {}
+    freqU_list = {}
+
+    harm_list = {} #harmonics
+    harm_pow_list = {} #harmonic power
+    harm_list_control = [[],[],[],[]] #harmonics for control
+
+    RPC_list = {} #Relative Power Contribution to the first harmonic (RPC)
+
+    RE_bat_list = {} #for relative energy calculations, using either bat or out
+    RE_out_list = {}
+    bat_totArea = [1,1,1,1] #initialize totArea lists used for RE calculations
+    out_totArea = [1,1,1,1]
+    rest_totArea = [1,1,1,1]
+
+    basic_diagnoses_nums = {}
+    basic_diagnoses_nums["control"] = 0
+    numPD = 0
+
+    max_outputX = [0,0,0,0] #max num of peaksX seen in any file, for each tremor type
+    max_outputY = [0,0,0,0] #maximum number of peaksY seen in any file
+    max_outputZ = [0,0,0,0] #maximum number of peaksZ seen in any file
+    max_outputU = [0,0,0,0]
+
+    finished_one = False #used to make sure only one plot of signal is done
+
+    num_not_accounted = 0 #num of patients who don't meet criteria for being analyzed in freq-spectra
+    names_not_accounted = [] #names of patients who don't meet criteria for being analyzed in freq-spectra
+
+    #Cumulative Data File
+    allDataFile = open("AllAnalysisData.csv","w+")
+    allDataFile.write("Name,Date,Diagnosis (basic),")
+    for tremor in tremor_types:
+        allDataFile.write("Mean Inst. Freq_"+tremor+",TSI_"+tremor+",TSI_amplitude_"+tremor+",Mean Peak Amplitude_"+tremor+",Stddev Peak Amplitude_+"+tremor+",TSI_amplitude to MeanPeakAmplitude ratio_"+tremor+",StddevPeakAmplitude to MeanPeakAmplitude ratio_"+tremor+",")
+        allDataFile.write("Peak Freq_X_"+tremor+",Peak Freq_Y_"+tremor+",Peak Freq_Z_"+tremor+",Peak Freq_U_"+tremor+",Peak Power_X_"+tremor+",Peak Power_Y_"+tremor+",Peak Power_Z_"+tremor+",Peak Power_U_"+tremor+",Harmonic Present_X_"+tremor+",Harmonic Present_Y_"+tremor+",Harmonic Present_Z_"+tremor+",Harmonic Present_U_"+tremor+",Harmonic Power_X_"+tremor+",Harmonic Power_Y_"+tremor+",Harmonic Power_Z_"+tremor+",Harmonic Power_U_"+tremor+",RPC_X_"+tremor+",RPC_Y_"+tremor+",RPC_Z_"+tremor+",RPC_U_"+tremor+",")
+    allDataFile.write("RE_bat,RE_out\n")
+
+    #Data file with only files that match the inclusion criterias
+    allDataFile_timeseries = open("AllAnalysisData_timeseries.csv","w+")
+    allDataFile_timeseries.write("Name,Date,Diagnosis (basic),")
+    for tremor in tremor_types:
+        allDataFile_timeseries.write("Mean Inst. Freq_"+tremor+",TSI_"+tremor+",TSI_amplitude_"+tremor+",Mean Peak Amplitude_"+tremor+",Stddev Peak Amplitude_+"+tremor+",TSI_amplitude to MeanPeakAmplitude ratio_"+tremor+",StddevPeakAmplitude to MeanPeakAmplitude ratio_"+tremor+",")
     allDataFile_timeseries.write("\n")
 
-num_not_accounted = len(names_not_accounted)
-print("num_not_accounted: "+ str(num_not_accounted))
+    allDataFile_freqspec = open("AllAnalysisData_freqspectra.csv","w+")
+    allDataFile_freqspec.write("Name,Date,Diagnosis (basic),")
+    for tremor in tremor_types:
+        allDataFile_freqspec.write("Peak Freq_X_"+tremor+",Peak Freq_Y_"+tremor+",Peak Freq_Z_"+tremor+",Peak Freq_U_"+tremor+",Peak Power_X_"+tremor+",Peak Power_Y_"+tremor+",Peak Power_Z_"+tremor+",Peak Power_U_"+tremor+",Harmonic Present_X_"+tremor+",Harmonic Present_Y_"+tremor+",Harmonic Present_Z_"+tremor+",Harmonic Present_U_"+tremor+",Harmonic Power_X_"+tremor+",Harmonic Power_Y_"+tremor+",Harmonic Power_Z_"+tremor+",Harmonic Power_U_"+tremor+",RPC_X_"+tremor+",RPC_Y_"+tremor+",RPC_Z_"+tremor+",RPC_U_"+tremor+",")
+    allDataFile_freqspec.write("RE_bat,RE_out\n")
+
+    for i in range(len(names)):
+        date = dates_all[i]
+        name = names[i]
+        basic_diagnosis = basic_diagnoses[i]
+        
+        MRN = MRNs[i]
+        if name=="?":
+            name = ""
+        
+        if MRN == "control":
+            basic_diagnoses_nums["control"] = basic_diagnoses_nums["control"] + 1
+        
+        if basic_diagnosis not in freq_list:
+            if MRN != "control":
+                #Time analysis
+                instAveFreq_list[basic_diagnosis] = [[],[],[],[]]
+                instAvePow_list[basic_diagnosis] = [[],[],[],[]] #Ave Peak Pow
+                instStdPow_list[basic_diagnosis] = [[],[],[],[]]
+                TSI_list[basic_diagnosis] = [[],[],[],[]]
+                TSI_ppow_list[basic_diagnosis] = [[],[],[],[]]
+                instTSIppow_AvePow_ratio_list[basic_diagnosis] = [[],[],[],[]]
+                instPow_Std_Ave_ratio_list[basic_diagnosis] = [[],[],[],[]]
+                
+                #Freq analysis
+                freq_list[basic_diagnosis] = [[],[],[],[]] #main freq
+                mpow_list[basic_diagnosis] = [[],[],[],[]] #mpow of main peak
+                harm_list[basic_diagnosis] = [[],[],[],[]] #harmonics
+                harm_pow_list[basic_diagnosis] = [[],[],[],[]] #harmonics powers
+                peakX_list[basic_diagnosis] = [[],[],[],[]]
+                peakY_list[basic_diagnosis] = [[],[],[],[]]
+                peakZ_list[basic_diagnosis] = [[],[],[],[]]
+                peakU_list[basic_diagnosis] = [[],[],[],[]]
+                
+                RPC_list[basic_diagnosis] = [[],[],[],[]]
+                RE_bat_list[basic_diagnosis] = []
+                RE_out_list[basic_diagnosis] = []
+                
+                freqX_list[basic_diagnosis] = [[],[],[],[]]
+                freqY_list[basic_diagnosis] = [[],[],[],[]]
+                freqZ_list[basic_diagnosis] = [[],[],[],[]]
+                freqU_list[basic_diagnosis] = [[],[],[],[]]
+                
+                basic_diagnoses_nums[basic_diagnosis] = 1 #Track number of patients of each diagnosis
+        else:
+            if MRN != "control":
+                basic_diagnoses_nums[basic_diagnosis] = basic_diagnoses_nums[basic_diagnosis] + 1
+        
+        noTSIforFile = False #if even one of the tremors for a given patient have TSI or TSI_ppow thats less than threshold values, don't consider this patient
+        
+        for j in range(len(tremor_types)):
+            tremor = tremor_types[j]
+            new_path = PATH + "/" + dates_all[i] + "/" + name + "/"+ tremor
+            os.chdir(new_path)
             
-#Time-series ave's/std's
-TSI_ave = {}
-TSI_std = {}
-TSI_num = {}
-instAveFreq_ave = {}
-instAveFreq_std = {}
-instAveFreq_num = {}
-TSI_ppow_ave = {}
-TSI_ppow_std = {}
-TSI_ppow_num = {}
-instAvePow_ave = {}
-instAvePow_std = {}
-instAvePow_num = {}
-instStdPow_ave = {}
-instStdPow_std = {}
-instStdPow_num = {}
-
-instTSIppow_AvePow_ratio_ave = {}
-instTSIppow_AvePow_ratio_std = {}
-instTSIppow_AvePow_ratio_num = {}
-
-instPow_Std_Ave_ratio_ave = {}
-instPow_Std_Ave_ratio_std = {}
-instPow_Std_Ave_ratio_num = {}
-
-#Freq ave's/std's
-freq_ave = {}
-freq_std = {}
-freq_num = {}
-
-#break freq into individual axes
-freqX_ave = {}
-freqX_std = {}
-freqX_num = {}
-freqY_ave = {}
-freqY_std = {}
-freqY_num = {}
-freqZ_ave = {}
-freqZ_std = {}
-freqZ_num = {}
-freqU_ave = {}
-freqU_std = {}
-freqU_num = {}
-
-mpow_ave = {}
-mpow_std = {}
-mpow_num = {}
-
-harm_ave = {}
-harm_std = {}
-harm_num = {}
-
-RPC_ave = {}
-RPC_std = {}
-RPC_num = {}
-
-#RE
-RE_bat_ave = {}
-RE_out_ave = {}
-RE_bat_std = {}
-RE_out_std = {}
-
-harm_pow_ave = {}
-harm_pow_std = {}
-harm_pow_num = {}
-
-peakX_sorted = {}
-peakY_sorted = {}
-peakZ_sorted = {}
-peakU_sorted = {}
-
-peakX_sorted_ave = {}
-peakX_sorted_num = {}
-peakX_sorted_std = {}
-peakY_sorted_ave = {}
-peakY_sorted_num = {}
-peakY_sorted_std = {}
-peakZ_sorted_ave = {}
-peakZ_sorted_num = {}
-peakZ_sorted_std = {}
-peakU_sorted_ave = {}
-peakU_sorted_num = {}
-peakU_sorted_std = {}
-
-num_type = 0
-
-#time-series analysis
-for diag in TSI_list:
-    TSIs = TSI_list[diag]
-    instFreqs = instAveFreq_list[diag]
-    
-    TSI_ave[diag] = [0.0,0.0,0.0,0.0] #element for bat, rest, out, kin respectively
-    TSI_std[diag] = [0.0,0.0,0.0,0.0]
-    TSI_num[diag] = [0.0,0.0,0.0,0.0]
-    instAveFreq_ave[diag] = [0.0,0.0,0.0,0.0]
-    instAveFreq_std[diag] = [0.0,0.0,0.0,0.0]
-    instAveFreq_num[diag] = [0.0,0.0,0.0,0.0]
-    
-    for i in range(4):#go through each tremor type
-        TSI_ave[diag][i] = average(TSIs[i])
-        instAveFreq_ave[diag][i] = average(instFreqs[i])
-        TSI_std[diag][i] = stddev(TSIs[i],TSI_ave[diag][i])
-        instAveFreq_std[diag][i] = stddev(instFreqs[i],instAveFreq_ave[diag][i])
-        TSI_num[diag] = len((TSI_list[diag])[0])
-        instAveFreq_num[diag] = len((instAveFreq_list[diag])[0])
-
-#time-series peak-power analysis
-for diag in TSI_ppow_list:
-    TSI_ppow = TSI_ppow_list[diag]
-    instPows = instAvePow_list[diag]
-    instStdPows = instStdPow_list[diag]
-    instTSIpows_ratios = instTSIppow_AvePow_ratio_list[diag]
-    instStdAve_ratios = instPow_Std_Ave_ratio_list[diag]
-    
-    TSI_ppow_ave[diag] = [0.0,0.0,0.0,0.0] #element for bat, rest, out, kin respectively
-    TSI_ppow_std[diag] = [0.0,0.0,0.0,0.0]
-    TSI_ppow_num[diag] = [0.0,0.0,0.0,0.0]
-    instAvePow_ave[diag] = [0.0,0.0,0.0,0.0]
-    instAvePow_std[diag] = [0.0,0.0,0.0,0.0]
-    instAvePow_num[diag] = [0.0,0.0,0.0,0.0]
-    instStdPow_ave[diag] = [0.0,0.0,0.0,0.0]
-    instStdPow_std[diag] = [0.0,0.0,0.0,0.0]
-    instStdPow_num[diag] = [0.0,0.0,0.0,0.0]
-    
-    instTSIppow_AvePow_ratio_ave[diag] = [0.0,0.0,0.0,0.0]
-    instTSIppow_AvePow_ratio_std[diag] = [0.0,0.0,0.0,0.0]
-    instTSIppow_AvePow_ratio_num[diag] = [0.0,0.0,0.0,0.0]
-
-    instPow_Std_Ave_ratio_ave[diag] = [0.0,0.0,0.0,0.0]
-    instPow_Std_Ave_ratio_std[diag] = [0.0,0.0,0.0,0.0]
-    instPow_Std_Ave_ratio_num[diag] = [0.0,0.0,0.0,0.0]
-    
-    for i in range(4):#go through each tremor type
-        TSI_ppow_ave[diag][i] = average(TSI_ppow[i])
-        instAvePow_ave[diag][i] = average(instPows[i])
-        instStdPow_ave[diag][i] = average(instStdPows[i])
-        instTSIppow_AvePow_ratio_ave[diag][i] = average(instTSIpows_ratios[i])
-        instPow_Std_Ave_ratio_ave[diag][i] = average(instStdAve_ratios[i])
-        
-        TSI_ppow_std[diag][i] = stddev(TSI_ppow[i],TSI_ppow_ave[diag][i])
-        instAvePow_std[diag][i] = stddev(instPows[i],instAvePow_ave[diag][i])
-        instStdPow_std[diag][i] = stddev(instStdPows[i],instStdPow_ave[diag][i])
-        instTSIppow_AvePow_ratio_std[diag][i] = stddev(instTSIpows_ratios[i],instTSIppow_AvePow_ratio_ave[diag][i])
-        instPow_Std_Ave_ratio_std[diag][i] = stddev(instStdAve_ratios[i],instPow_Std_Ave_ratio_ave[diag][i])
-        
-        TSI_ppow_num[diag] = len((TSI_ppow_list[diag])[i])
-        instAvePow_num[diag] = len((instAvePow_list[diag])[i])
-        instStdPow_num[diag] = len((instStdPow_list[diag])[i])   
-        instTSIppow_AvePow_ratio_num[diag] = len((instTSIppow_AvePow_ratio_list[diag])[i])
-        instPow_Std_Ave_ratio_num[diag] = len((instPow_Std_Ave_ratio_list[diag])[i])
-    
-#save time-series analysis to file
-os.chdir(PATH)
-with open("timeseries_analysis.csv","w") as o:
-    #Write main freqs
-    o.write("Average TSI,,,,,,Ave Inst. Freq")
-    o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
-    for diag in TSI_ave:
-        o.write(str(diag)+",")
-        frs = TSI_ave[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = instAveFreq_ave[diag]
-        o.write(",")
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-        
-    o.write("Stddev TSI,,,,,,Stddev Inst. Freq")
-    o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
-    for diag in TSI_std:
-        o.write(str(diag)+",")
-        frs = TSI_std[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = instAveFreq_std[diag]
-        o.write(",")
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    o.write("Num TSI,,,,,,Num Inst. Freq")
-    o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
-    for diag in TSI_std:
-        o.write(str(diag)+",")
-        frs = TSI_num[diag]
-        for i in range(4):
-            o.write(str(frs)+",")
-        frs = instAveFreq_num[diag]
-        o.write(",")
-        for i in range(4):
-            o.write(str(frs)+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    o.write("SEM TSI,,,,,,SEM Inst. Freq")
-    o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
-    for diag in TSI_std:
-        o.write(str(diag)+",")
-        frs1 = TSI_std[diag]
-        frs2 = TSI_num[diag]
-        for i in range(len(frs1)):
-            if frs2 > 0:
-                o.write(str(frs1[i]/(math.sqrt(frs2)))+",")
-            else:
-                o.write(",")
-        frs1 = instAveFreq_std[diag]
-        frs2 = instAveFreq_num[diag]
-        o.write(",")
-        for i in range(len(frs1)):
-            if frs2 > 0:
-                o.write(str(frs1[i]/(math.sqrt(frs2)))+",")
-            else:
-                o.write(",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    o.write("Average TSI Peak Power,,,,,,Ave Inst. Peak Power,,,,,Stddev Inst. Peak Power (within file),,,,,Stddev Inst. Peak Power (across files)")
-    o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
-    for diag in TSI_ppow_ave:
-        o.write(str(diag)+",")
-        frs = TSI_ppow_ave[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = instAvePow_ave[diag]
-        o.write(",")
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = instStdPow_ave[diag]
-        o.write(",")
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = instAvePow_std[diag]
-        o.write(",")
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    o.write("Average TSI:AveragePower ratio,,,,,,Ave Peak Power std:ave ratio")
-    o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
-    for diag in instTSIppow_AvePow_ratio_ave:
-        o.write(str(diag)+",")
-        frs = instTSIppow_AvePow_ratio_ave[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = instPow_Std_Ave_ratio_ave[diag]
-        o.write(",")
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    o.write("Stddev TSI Peak Power,,,,,,Stddev Inst. Peak Power,,,,,Stddev of stddev Inst. Peak Power ")
-    o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
-    for diag in TSI_ppow_std:
-        o.write(str(diag)+",")
-        frs = TSI_ppow_std[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = instAvePow_std[diag]
-        o.write(",")
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = instStdPow_std[diag]
-        o.write(",")
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    o.write("Stddev TSI:AveragePower ratio,,,,,,Stddev Peak Power std:ave ratio")
-    o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
-    for diag in instTSIppow_AvePow_ratio_std:
-        o.write(str(diag)+",")
-        frs = instTSIppow_AvePow_ratio_std[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = instPow_Std_Ave_ratio_std[diag]
-        o.write(",")
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-        
-    
-#Freq analysis
-for diag in freq_list:
-    freqs = freq_list[diag]
-    #Each list has 4-element array for x,y,z,y respectively
-    freq_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    freq_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    
-    #for each axes:
-    freqX = freqX_list[diag]
-    freqY = freqY_list[diag]
-    freqZ = freqZ_list[diag]
-    freqU = freqU_list[diag]
-    
-    freqX_ave[diag] = [0.0,0.0,0.0,0.0]
-    freqX_std[diag] = [0.0,0.0,0.0,0.0]
-    freqX_num[diag] = [0.0,0.0,0.0,0.0]
-    freqY_ave[diag] = [0.0,0.0,0.0,0.0]
-    freqY_std[diag] = [0.0,0.0,0.0,0.0]
-    freqY_num[diag] = [0.0,0.0,0.0,0.0]
-    freqZ_ave[diag] = [0.0,0.0,0.0,0.0]
-    freqZ_std[diag] = [0.0,0.0,0.0,0.0]
-    freqZ_num[diag] = [0.0,0.0,0.0,0.0]
-    freqU_ave[diag] = [0.0,0.0,0.0,0.0]
-    freqU_std[diag] = [0.0,0.0,0.0,0.0]
-    freqU_num[diag] = [0.0,0.0,0.0,0.0]
-    
-    
-    mpows = mpow_list[diag]
-    #Each list has 4-element array for x,y,z,y respectively
-    mpow_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    mpow_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    
-    RPC = RPC_list[diag]
-    RPC_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    RPC_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    
-    RE_bat = RE_bat_list[diag]
-    RE_bat_ave[diag] = 0.0
-    RE_out_ave[diag] = 0.0
-    RE_bat_std[diag] = 0.0
-    RE_out_std[diag] = 0.0
-    
-    harm = harm_list[diag]
-    harm_pow = harm_pow_list[diag]
-    #Each list has 4-element array for x,y,z,y respectively
-    harm_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    harm_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    
-    harm_pow_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    harm_pow_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-    
-    peakX_sorted[diag] = [[],[],[],[]]
-    peakY_sorted[diag] = [[],[],[],[]]
-    peakZ_sorted[diag] = [[],[],[],[]]
-    peakU_sorted[diag] = [[],[],[],[]]
-    
-    peakX_sorted_ave[diag] = [[],[],[],[]]
-    peakX_sorted_num[diag] = [[],[],[],[]] #num of peaks within i-th peak # ave
-    peakX_sorted_std[diag] = [[],[],[],[]]
-    peakY_sorted_ave[diag] = [[],[],[],[]]
-    peakY_sorted_num[diag] = [[],[],[],[]]
-    peakY_sorted_std[diag] = [[],[],[],[]]
-    peakZ_sorted_ave[diag] = [[],[],[],[]]
-    peakZ_sorted_num[diag] = [[],[],[],[]]
-    peakZ_sorted_std[diag] = [[],[],[],[]]
-    peakU_sorted_ave[diag] = [[],[],[],[]]
-    peakU_sorted_num[diag] = [[],[],[],[]]
-    peakU_sorted_std[diag] = [[],[],[],[]]
-    
-    freq_num[diag] = len((freq_list[diag])[0])
-    mpow_num[diag] = len((mpow_list[diag])[0])
-    
-    #for each axis: fix this
-    # freqX_num[diag] = len((freqX_list[diag])[0])
-    # freqY_num[diag] = len((freqY_list[diag])[0])
-    # freqZ_num[diag] = len((freqZ_list[diag])[0])
-    # freqU_num[diag] = len((freqU_list[diag])[0])
-    
-    
-    print(diag+": "+str(freq_num[diag]))
-    
-    RE_bat_ave[diag] = average(RE_bat_list[diag])
-    RE_bat_std[diag] = stddev(RE_bat_list[diag],RE_bat_ave[diag])
-    RE_out_ave[diag] = average(RE_out_list[diag])
-    RE_out_std[diag] = stddev(RE_out_list[diag],RE_out_ave[diag])
-    
-    for i in range(4):#go through each tremor type
-        if [] not in freq_list[diag]:
-            freq_ave[diag][i] = ave(freqs[i])
-            freq_std[diag][i] = std(freqs[i],freq_ave[diag][i])
+            cmd = "ls *.csv"
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=None, shell=True)
+            output = process.communicate()
+            file = (str(output[0])).lstrip("b").strip("'").strip("\\n").strip()
+            if file[0] == 'f' and file[1] == '_':
+                continue
             
-            mpow_ave[diag][i] = ave(mpows[i])
-            mpow_std[diag][i] = std(mpows[i],mpow_ave[diag][i])
+            #Analysis-function outputs:
+            #******
+            analysis_output = freq_analysis(file, new_path) #Freq analysis
+            display_plot = False
+            setFreqRange = False #only set to true if OT, since don't want to restrict freq to 2-9Hz in proecessing
+            if basic_diagnosis == 'Orthostatic tremor':
+                setFreqRange =  True
             
-            RPC_ave[diag][i] = ave(RPC[i])
-            RPC_std[diag][i] = std(RPC[i],RPC_ave[diag][i])
+            # if tremor == 'rest' and basic_diagnosis == 'Dystonic tremor':# and finished_one == False:
+            #     print(name)
+            #     display_plot = True
+            #     finished_one = True
             
-            harm_ave[diag][i] = ave(harm[i])
-            harm_std[diag][i] = std(harm[i],harm_ave[diag][i])
-        
-            harm_pow_ave[diag][i] = ave(harm_pow[i])
-            harm_pow_std[diag][i] = std(harm_pow[i],harm_pow_ave[diag][i])
-        if [] not in freqX_list[diag]:
-            freqX_ave[diag][i] = average(freqX[i])
-            freqY_ave[diag][i] = average(freqY[i])
-            freqZ_ave[diag][i] = average(freqZ[i])
-            freqU_ave[diag][i] = average(freqU[i])
-            freqX_std[diag][i] = stddev(freqX[i],freqX_ave[diag][i])
-            freqY_std[diag][i] = stddev(freqY[i],freqY_ave[diag][i])
-            freqZ_std[diag][i] = stddev(freqZ[i],freqZ_ave[diag][i])
-            freqU_std[diag][i] = stddev(freqU[i],freqU_ave[diag][i])
-            freqX_num[diag][i] = len(freqX[i])
-            freqY_num[diag][i] = len(freqY[i])
-            freqZ_num[diag][i] = len(freqZ[i])
-            freqU_num[diag][i] = len(freqU[i])
+            timeseries_output = timeseries_analysis(file, new_path, display_plot,setFreqRange) #timeseries analysis
+            #******
             
-            # #Print for checking
-            # if i==2 and diag =='PD':
-            #     for j in range(len(freqX[i])):
-            #         print(str(freqX[i][j])+"\n")
-        
-        #Sort peaks   
-        num_type = min(len(peakX_list[diag][i]),len(peakY_list[diag][i]),len(peakZ_list[diag][i])) #number of files in each diag
-        for j in range(num_type):
-            peaksX = peakX_list[diag][i][j] #peaks in the given file
-            peaksY = peakY_list[diag][i][j]
-            peaksZ = peakZ_list[diag][i][j]
-            peaksU = peakZ_list[diag][i][j]
-            for k in range(len(peaksX)):
-                if (k+1) > len(peakX_sorted[diag][i]):
-                    peakX_sorted[diag][i].append([])#add position for kth-peak
-                peakX_sorted[diag][i][k].append(peaksX[k])
-            for k in range(len(peaksY)):
-                if (k+1) > len(peakY_sorted[diag][i]):
-                    peakY_sorted[diag][i].append([])#add position for kth-peak
-                peakY_sorted[diag][i][k].append(peaksY[k])
-            for k in range(len(peaksZ)):
-                if (k+1) > len(peakZ_sorted[diag][i]):
-                    peakZ_sorted[diag][i].append([])#add position for kth-peak
-                peakZ_sorted[diag][i][k].append(peaksZ[k])
-            for k in range(len(peaksU)):
-                if (k+1) > len(peakU_sorted[diag][i]):
-                    peakU_sorted[diag][i].append([])#add position for kth-peak
-                peakU_sorted[diag][i][k].append(peaksU[k])
-        
-        #average the individual peak data
-        for j in range(len(peakX_sorted[diag][i])):
-            if (j+1) > len(peakX_sorted_ave[diag][i]):
-                peakX_sorted_ave[diag][i].append([])
-                peakX_sorted_num[diag][i].append([])
-                peakX_sorted_std[diag][i].append([])
-            peakX_sorted_ave[diag][i][j] = ave(peakX_sorted[diag][i][j])
-            peakX_sorted_num[diag][i][j] = len(peakX_sorted[diag][i][j])
-            peakX_sorted_std[diag][i][j] = std(peakX_sorted[diag][i][j],peakX_sorted_ave[diag][i][j])
-        for j in range(len(peakY_sorted[diag][i])):
-            if (j+1) > len(peakY_sorted_ave[diag][i]):
-                peakY_sorted_ave[diag][i].append([])
-                peakY_sorted_num[diag][i].append([])
-                peakY_sorted_std[diag][i].append([])
-            peakY_sorted_ave[diag][i][j] = ave(peakY_sorted[diag][i][j])
-            peakY_sorted_num[diag][i][j] = len(peakY_sorted[diag][i][j])
-            peakY_sorted_std[diag][i][j] = std(peakY_sorted[diag][i][j],peakY_sorted_ave[diag][i][j])
-        for j in range(len(peakZ_sorted[diag][i])):
-            if (j+1) > len(peakZ_sorted_ave[diag][i]):
-                peakZ_sorted_ave[diag][i].append([])
-                peakZ_sorted_num[diag][i].append([])
-                peakZ_sorted_std[diag][i].append([])
-            peakZ_sorted_ave[diag][i][j] = ave(peakZ_sorted[diag][i][j])
-            peakZ_sorted_num[diag][i][j] = len(peakZ_sorted[diag][i][j])
-            peakZ_sorted_std[diag][i][j] = std(peakZ_sorted[diag][i][j],peakZ_sorted_ave[diag][i][j])
-        #Composite peaks:
-        for j in range(len(peakU_sorted[diag][i])):
-            if (j+1) > len(peakU_sorted_ave[diag][i]):
-                peakU_sorted_ave[diag][i].append([])
-                peakU_sorted_num[diag][i].append([])
-                peakU_sorted_std[diag][i].append([])
-            peakU_sorted_ave[diag][i][j] = ave(peakU_sorted[diag][i][j])
-            peakU_sorted_num[diag][i][j] = len(peakU_sorted[diag][i][j])
-            peakU_sorted_std[diag][i][j] = std(peakU_sorted[diag][i][j],peakU_sorted_ave[diag][i][j])
-
-
-freq_ave_control = []
-freq_std_control = []
-freq_num_control = 0
-mpow_ave_control = []
-mpow_std_control = []
-mpow_num_control = 0
-harm_ave_control = []
-harm_std_control = []
-harm_num_control = 0
-
-freqs_control = freq_list_control
-#each array in the list has 4 elements, since x,y,z, & u
-freq_ave_control = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-freq_std_control = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
-freq_num_control = len(freqs_control[0])
-#print(freq_num_control)
-
-for i in range(4):
-    freq_ave_control[i] = ave(freqs_control[i])
-    freq_std_control[i] = std(freqs_control[i],freq_ave_control[i])
-
-#Num of patients in each diagnosis group
-os.chdir(PATH)
-with open("num_patients.csv","w") as o:
-    diag_keys = basic_diagnoses_nums.keys()
-    o.write("Diagnosis,num of patients\n")
-    sum = 0
-    for i in basic_diagnoses_nums:
-        o.write(str(i)+","+str(basic_diagnoses_nums[i])+"\n")
-        sum += basic_diagnoses_nums[i]
-    o.write("Total,"+str(sum))
-
-os.chdir(PATH)
-with open("tremor_analysis.csv","w") as o:
-    #Write main freqs
-    o.write("Main Freqs,\nDiagnosis,Bat Average X_freq,Bat Average Y_freq,Bat Average Z_freq,Bat Average U_freq,Kin Average X_freq,Kin Average Y_freq,Kin Average Z_freq,Kin Average U_freq,Out Average X_freq,Out Average Y_freq,Out Average Z_freq,Out Average U_freq,Rest Average X_freq,Rest Average Y_freq,Rest Average Z_freq,Rest Average U_freq\n")
-    for diag in freq_ave:
-        o.write(str(diag)+",")
-        # frs = freq_ave[diag]
-        # for i in range(len(frs)):
-        #     for j in range(len(frs[i])):
-        #         o.write(str(frs[i][j])+",")
-        frs = freqX_ave[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = freqY_ave[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = freqZ_ave[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = freqU_ave[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-        
-    o.write("Diagnosis,Bat Std X_freq,Bat Std Y_freq,Bat Std Z_freq,Bat Std U_freq,Kin Std X_freq,Kin Std Y_freq,Kin Std Z_freq,Kin Std U_freq,Out Std X_freq,Out Std Y_freq,Out Std Z_freq,Out Std U_freq,Rest Std X_freq,Rest Std Y_freq,Rest Std Z_freq,Rest Std U_freq\n")
-    for diag in freq_std:
-        o.write(str(diag)+",")
-        # frs = freq_std[diag]
-        # for i in range(len(frs)):
-        #     for j in range(len(frs[i])):
-        #         o.write(str(frs[i][j])+",")
-        # o.write("\n")
-        # o.write(str(diag)+",")
-        frs = freqX_std[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = freqY_std[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = freqZ_std[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = freqU_std[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    o.write("Diagnosis,Bat CV X_freq,Bat CV Y_freq,Bat CV Z_freq,Bat CV U_freq,Kin CV X_freq,Kin CV Y_freq,Kin CV Z_freq,Kin CV U_freq,Out CV X_freq,Out CV Y_freq,Out CV Z_freq,Out CV U_freq,Rest CV X_freq,Rest CV Y_freq,Rest CV Z_freq,Rest CV U_freq\n")
-    for diag in freq_std:
-        o.write(str(diag)+",")
-        # frs = freq_std[diag]
-        # frs2 = freq_ave[diag]
-        # for i in range(len(frs)):
-        #     for j in range(len(frs[i])):
-        #         if frs2[i][j]>0:
-        #             o.write(str(frs[i][j]/frs2[i][j])+",")
-        #         else:
-        #             o.write("0.0,")
-        frs = freqX_std[diag]
-        frs2 = freqX_ave[diag]
-        for i in range(len(frs)):
-            if frs2[i]>0:
-                o.write(str(frs[i]/frs2[i])+",")
+            if j==0:
+                bat_RE_present = False
+                out_RE_present = False
+                rest_RE_present = False
+            
+            #Time-series analysis
+            f_inst = timeseries_output[0]
+            df_inst = timeseries_output[1]
+            f_c = timeseries_output[2]
+            #f_median = timeseries_output[3]
+            TSI = timeseries_output[3]
+            sig_trans = timeseries_output[4]
+            zero_cross = timeseries_output[5]
+            tim = timeseries_output[6]
+            TSI_ppow = timeseries_output[7]
+            peakPowers = timeseries_output[8]
+            peakPowAve = timeseries_output[9]
+            peakPowStd = timeseries_output[10]
+            maxPow = timeseries_output[11]
+            minPow = timeseries_output[12]
+            
+            #to normalize these amplitude-related values to the ave. peak power
+            TSIppow_AvePow_ratio = TSI_ppow/peakPowAve
+            peakPow_Std_Ave_ratio = peakPowStd/peakPowAve
+            
+            #if any of the TSI values is less than threshold, don't consider this patient by deleting the TSI values form cumulative list afterwards
+            if TSI < 0.1 or TSI_ppow < 0.001:
+                noTSIforFile = True
+                if MRN!="control":
+                    if j==0:
+                        allDataFile_timeseries.write(name + "," + date + "," + basic_diagnosis + ",")
+                    allDataFile_timeseries.write(",,,,,,,")
             else:
-                o.write("0.0,")
-        frs = freqY_std[diag]
-        frs2 = freqY_ave[diag]
-        for i in range(len(frs)):
-            if frs2[i]>0:
-                o.write(str(frs[i]/frs2[i])+",")
-            else:
-                o.write("0.0,")
-        frs = freqZ_std[diag]
-        frs2 = freqZ_ave[diag]
-        for i in range(len(frs)):
-            if frs2[i]>0:
-                o.write(str(frs[i]/frs2[i])+",")
-            else:
-                o.write("0.0,")
-        frs = freqU_std[diag]
-        frs2 = freqU_ave[diag]
-        for i in range(len(frs)):
-            if frs2[i]>0:
-                o.write(str(frs[i]/frs2[i])+",")
-            else:
-                o.write("0.0,")
+                #only write data that meets inclusion criteria to 'timeseries' file
+                if MRN!="control":
+                    if j==0:
+                        allDataFile_timeseries.write(name + "," + date + "," + basic_diagnosis + ",")
+                    allDataFile_timeseries.write(str(f_c) + "," + str(TSI) + "," + str(TSI_ppow) + "," + str(peakPowAve) + "," + str(peakPowStd) + "," + str(TSIppow_AvePow_ratio) + "," + str(peakPow_Std_Ave_ratio)+",")
+            
+            
+            if MRN != "control":
+                instAveFreq_list[basic_diagnosis][j].append(f_c)
+                TSI_list[basic_diagnosis][j].append(TSI)
+                TSI_ppow_list[basic_diagnosis][j].append(TSI_ppow)
+                instAvePow_list[basic_diagnosis][j].append(peakPowAve)
+                instStdPow_list[basic_diagnosis][j].append(peakPowStd)
+                instTSIppow_AvePow_ratio_list[basic_diagnosis][j].append(TSIppow_AvePow_ratio)
+                instPow_Std_Ave_ratio_list[basic_diagnosis][j].append(peakPow_Std_Ave_ratio)
+            
+            #write data to AllDataFile
+            #Write patient info to cumulative data file
+            if j==0:
+                if MRN=="control":
+                    allDataFile.write(name + "," + date + "," + MRN + ",")
+                else:
+                    allDataFile.write(name + "," + date + "," + basic_diagnosis + ",")
+            allDataFile.write(str(f_c) + "," + str(TSI) + "," + str(TSI_ppow) + "," + str(peakPowAve) + "," + str(peakPowStd) + "," + str(TSIppow_AvePow_ratio) + "," + str(peakPow_Std_Ave_ratio)+",")
+            
+            #Save f-df data for all dystonic tremor files
+            #if basic_diagnosis == 'Dystonic tremor':
+            with open("f_df_"+basic_diagnosis+str(basic_diagnoses_nums[basic_diagnosis])+"_"+tremor+".csv","w") as o:
+                o.write("TSI,"+str(TSI)+"\n")
+                o.write("f_c,"+str(f_c)+"\n")
+                o.write("TSI_amplitude,"+str(TSI_ppow)+"\n")
+                o.write("Ave inst. ampl,"+ str(peakPowAve) +"\n")
+                o.write("Std of inst. ampl," + str(peakPowStd) +"\n")
+                o.write("Max peak pow," + str(maxPow) + "\n")
+                o.write("Min peak pow," + str(minPow) + "\n")
+                #o.write("f_mean,"+str(f_c)+"\n")
+                #o.write("f_median,"+str(f_median)+"\n")
+                o.write("f,df\n")
+                for k in range(len(df_inst)):
+                    o.write(str(f_inst[k])+","+str(df_inst[k])+"\n")
+                
+                #if display_plot == True:
+                o.write("\n\n")
+                o.write("Signal after Filters\n")
+                for k in range(len(sig_trans)):
+                    o.write(str(tim[k])+","+str(sig_trans[k])+"\n")
+                
+                o.write("\n")
+                o.write("Zero crossings\n")
+                for k in range(len(zero_cross)):
+                    o.write(str(zero_cross[k])+"\n")
+                o.close()
+                
+            
+            #Freq analysis:
+            th = 0
+            #if basic_diagnosis == 'ET':
+                # if len(analysis_output[4]) > 0:
+                #     print(name,tremor)
+                #     print(analysis_output[4][0][5])
+                #     print(analysis_output[4][0])
+                #     print("\n")
+            
+            # if name == 'AG' and tremor == 'bat':
+            #     print(analysis_output[0])
+            #     print(len(analysis_output[3]))
+            #     print(analysis_output[3])
+            #     print("")
+            #     print(analysis_output[9])
+            #     print("")
+                
+            if len(analysis_output[4]) > 0:
+                th = analysis_output[4][0][5]
+            # if th > 2: #i==18 and j==1:#i==24 and j==1: #JS = 32
+            #     print(analysis_output[4][0])
+            #     print(name,tremor)
+            #     print(analysis_output[6],'\n')
+            #     print(analysis_output[1],'\n')
+            #     print(analysis_output[2],'\n')
+            #     print(analysis_output[3],'\n')
+            #     print(analysis_output[4],'\n')
+            #     os.chdir(PATH)
+            #     with open("file1.csv","w") as o:
+            #         o.write("p1X,p2X,pmaxX,powmaxX,pIntegX\n")
+            #         tmp = analysis_output[1]
+            #         for k in range(len(tmp)):
+            #             o.write(str(tmp[k][0])+","+str(tmp[k][1])+","+str(tmp[k][2])+","+str(tmp[k][3])+","+str(tmp[k][4])+"\n")
+            
+            if MRN == "control":
+                freq_list_control[j].append(analysis_output[0])
+                harm_list_control[j].append(analysis_output[6])
+                peakX_list_control[j].append(analysis_output[1])
+                peakY_list_control[j].append(analysis_output[2])
+                peakZ_list_control[j].append(analysis_output[3])
+                peakU_list_control[j].append(analysis_output[4])
+                mpow_list_control[j].append(analysis_output[7])
+            if MRN == "control" or MRN != "control": #doing this so have control file stats calculated for AllDataFile
+                # if analysis_output[0] != [0.0,0.0,0.0,0.0]:
+                #     freq_list[basic_diagnosis][j].append(analysis_output[0])
+                #     mpow_list[basic_diagnosis][j].append(analysis_output[7])
+                # zero = 0.0
+                # if zero in analysis_output[0]:
+                #     print(name,basic_diagnosis,analysis_output[0].index(zero))
+                    
+                output_X = analysis_output[1]
+                output_Y = analysis_output[2]
+                output_Z = analysis_output[3]
+                output_U = analysis_output[4]
+                
+                #Write to AllData file:
+                allDataFile.write(','.join(str(e) for e in analysis_output[0]) + "," + ','.join(str(e) for e in analysis_output[7]) + "," + ','.join(str(e) for e in analysis_output[6]) + "," + ','.join(str(e) for e in analysis_output[8]) + "," + ','.join(str(e) for e in analysis_output[9]) + ",")
+                
+                #switch to 'or' or 'and' for more strict filtering
+                #if len(output_X)>0 and len(output_Y)>0 and len(output_Z)>0 and len(output_U)>0:
+                pow_thres = 0.05 #max_power above which file must be to be considered
+                
+                #if last file for given patient, calculated 'relative energy' (RE)
+                if j==0:
+                    bat_totArea = analysis_output[10]
+                elif j==2:
+                    out_totArea = analysis_output[10]
+                elif j==3:
+                    rest_totArea = analysis_output[10]
+                    #print(str(bat_totArea[2])+"; "+str(out_totArea[2])+"; "+str(rest_totArea[2]))
+                    #Use z-axis for calculation
+                    
+                    allDataFile.write(str(rest_totArea[2]/bat_totArea[2]) + "," + str(rest_totArea[2]/out_totArea[2]) + ",")
+
+                if analysis_output[7][0] > pow_thres or analysis_output[7][1] > pow_thres or analysis_output[7][2] > pow_thres or analysis_output[7][3] > pow_thres:
+                    #print(basic_diagnosis+", "+tremor+", "+name)
+                    if MRN!="control":
+                        freq_list[basic_diagnosis][j].append(analysis_output[0])
+                        mpow_list[basic_diagnosis][j].append(analysis_output[7])
+                        harm_list[basic_diagnosis][j].append(analysis_output[6]) #harmonics
+                        RPC_list[basic_diagnosis][j].append(analysis_output[9])
+                        
+                        if analysis_output[8] != [0.0,0.0,0.0,0.0]:
+                            harm_pow_list[basic_diagnosis][j].append(analysis_output[8])
+                    
+                        if j==0:
+                            allDataFile_freqspec.write(name + "," + date + "," + basic_diagnosis + ",")
+                            bat_RE_present = True
+                        elif j==2:
+                            out_RE_present = True
+                        elif j==3:
+                            rest_RE_present = True
+                        allDataFile_freqspec.write(','.join(str(e) for e in analysis_output[0]) + "," + ','.join(str(e) for e in analysis_output[7]) + "," + ','.join(str(e) for e in analysis_output[6]) + "," + ','.join(str(e) for e in analysis_output[8]) + "," + ','.join(str(e) for e in analysis_output[9]) + ",")
+                    
+                    #write RE data to file, RE_bat & RE_out
+                    if j==3: #only write RE data to AllData_freqspec if on j==3
+                        rest_RE_present = True
+                        if MRN!="control":
+                            RE_bat_list[basic_diagnosis].append(rest_totArea[2]/bat_totArea[2])
+                            RE_out_list[basic_diagnosis].append(rest_totArea[2]/out_totArea[2])
+                        
+                            #allDataFile_freqspec.write(str(rest_totArea[2]/bat_totArea[2]) + "," + str(rest_totArea[2]/out_totArea[2]) + ",")
+                else:
+                    #print("name: "+ name+", date: "+ date+ ", tremor: "+tremor+", diag: "+basic_diagnosis)
+                    if MRN!="control":
+                        if j==0:
+                            allDataFile_freqspec.write(name + "," + date + "," + basic_diagnosis + ",")
+                        allDataFile_freqspec.write(",,,," + ",,,," + ",,,," + ",,,," + ",,,,")
+                    if name not in names_not_accounted:
+                        names_not_accounted.append((name + ", " + basic_diagnosis))
+                if j==3:
+                    if bat_RE_present == True and out_RE_present == True and rest_RE_present == True and MRN!="control":
+                        allDataFile_freqspec.write(str(rest_totArea[2]/bat_totArea[2]) + "," + str(rest_totArea[2]/out_totArea[2]) + ",")
+                    else:
+                        if MRN!="control":
+                            allDataFile_freqspec.write(",,")
+                
+                #for each axis
+                if len(output_X)>0:
+                    freqX_list[basic_diagnosis][j].append(analysis_output[0][0])
+                    peakX_list[basic_diagnosis][j].append(output_X)
+                if len(output_Y)>0:
+                    freqY_list[basic_diagnosis][j].append(analysis_output[0][1])
+                    peakY_list[basic_diagnosis][j].append(output_Y)
+                if len(output_Z)>0:
+                    freqZ_list[basic_diagnosis][j].append(analysis_output[0][2])
+                    peakZ_list[basic_diagnosis][j].append(output_Z)
+                if len(output_U)>0:
+                    if output_U[0][5] < 1:
+                        freqU_list[basic_diagnosis][j].append(analysis_output[0][3])
+                        peakU_list[basic_diagnosis][j].append(output_U)
+                
+                #peakX_list[basic_diagnosis][j].append(output_X)
+                #peakY_list[basic_diagnosis][j].append(output_Y)
+                #peakZ_list[basic_diagnosis][j].append(output_Z)
+                #peakU_list[basic_diagnosis][j].append(output_U)
+                
+                # if len(outputX) > max_outputX[j]:
+                #     max_outputX[j] = len(outputX)
+                # if len(outputY) > max_outputY[j]:
+                #     max_outputY[j] = len(outputY)
+                # if len(outputZ) > max_outputZ[j]:
+                #     max_outputZ[j] = len(outputZ)
+                
+        
+        #delete this patient from all cumulative TSI lists if even one of the four tremors had a TSI that didn't meet the threshold
+        if noTSIforFile == True and MRN != "control":
+            for j in range(len(tremor_types)):
+                del instAveFreq_list[basic_diagnosis][j][-1]
+                del TSI_list[basic_diagnosis][j][-1]
+                del TSI_ppow_list[basic_diagnosis][j][-1]
+                del instAvePow_list[basic_diagnosis][j][-1]
+                del instStdPow_list[basic_diagnosis][j][-1]
+                del instTSIppow_AvePow_ratio_list[basic_diagnosis][j][-1]
+                del instPow_Std_Ave_ratio_list[basic_diagnosis][j][-1]
+        
+        allDataFile.write("\n")
+        allDataFile_freqspec.write("\n")
+        allDataFile_timeseries.write("\n")
+
+    num_not_accounted = len(names_not_accounted)
+    print("num_not_accounted: "+ str(num_not_accounted))
+                
+    #Time-series ave's/std's
+    TSI_ave = {}
+    TSI_std = {}
+    TSI_num = {}
+    instAveFreq_ave = {}
+    instAveFreq_std = {}
+    instAveFreq_num = {}
+    TSI_ppow_ave = {}
+    TSI_ppow_std = {}
+    TSI_ppow_num = {}
+    instAvePow_ave = {}
+    instAvePow_std = {}
+    instAvePow_num = {}
+    instStdPow_ave = {}
+    instStdPow_std = {}
+    instStdPow_num = {}
+
+    instTSIppow_AvePow_ratio_ave = {}
+    instTSIppow_AvePow_ratio_std = {}
+    instTSIppow_AvePow_ratio_num = {}
+
+    instPow_Std_Ave_ratio_ave = {}
+    instPow_Std_Ave_ratio_std = {}
+    instPow_Std_Ave_ratio_num = {}
+
+    #Freq ave's/std's
+    freq_ave = {}
+    freq_std = {}
+    freq_num = {}
+
+    #break freq into individual axes
+    freqX_ave = {}
+    freqX_std = {}
+    freqX_num = {}
+    freqY_ave = {}
+    freqY_std = {}
+    freqY_num = {}
+    freqZ_ave = {}
+    freqZ_std = {}
+    freqZ_num = {}
+    freqU_ave = {}
+    freqU_std = {}
+    freqU_num = {}
+
+    mpow_ave = {}
+    mpow_std = {}
+    mpow_num = {}
+
+    harm_ave = {}
+    harm_std = {}
+    harm_num = {}
+
+    RPC_ave = {}
+    RPC_std = {}
+    RPC_num = {}
+
+    #RE
+    RE_bat_ave = {}
+    RE_out_ave = {}
+    RE_bat_std = {}
+    RE_out_std = {}
+
+    harm_pow_ave = {}
+    harm_pow_std = {}
+    harm_pow_num = {}
+
+    peakX_sorted = {}
+    peakY_sorted = {}
+    peakZ_sorted = {}
+    peakU_sorted = {}
+
+    peakX_sorted_ave = {}
+    peakX_sorted_num = {}
+    peakX_sorted_std = {}
+    peakY_sorted_ave = {}
+    peakY_sorted_num = {}
+    peakY_sorted_std = {}
+    peakZ_sorted_ave = {}
+    peakZ_sorted_num = {}
+    peakZ_sorted_std = {}
+    peakU_sorted_ave = {}
+    peakU_sorted_num = {}
+    peakU_sorted_std = {}
+
+    num_type = 0
+
+    #time-series analysis
+    for diag in TSI_list:
+        TSIs = TSI_list[diag]
+        instFreqs = instAveFreq_list[diag]
+        
+        TSI_ave[diag] = [0.0,0.0,0.0,0.0] #element for bat, rest, out, kin respectively
+        TSI_std[diag] = [0.0,0.0,0.0,0.0]
+        TSI_num[diag] = [0.0,0.0,0.0,0.0]
+        instAveFreq_ave[diag] = [0.0,0.0,0.0,0.0]
+        instAveFreq_std[diag] = [0.0,0.0,0.0,0.0]
+        instAveFreq_num[diag] = [0.0,0.0,0.0,0.0]
+        
+        for i in range(4):#go through each tremor type
+            TSI_ave[diag][i] = average(TSIs[i])
+            instAveFreq_ave[diag][i] = average(instFreqs[i])
+            TSI_std[diag][i] = stddev(TSIs[i],TSI_ave[diag][i])
+            instAveFreq_std[diag][i] = stddev(instFreqs[i],instAveFreq_ave[diag][i])
+            TSI_num[diag] = len((TSI_list[diag])[0])
+            instAveFreq_num[diag] = len((instAveFreq_list[diag])[0])
+
+    #time-series peak-power analysis
+    for diag in TSI_ppow_list:
+        TSI_ppow = TSI_ppow_list[diag]
+        instPows = instAvePow_list[diag]
+        instStdPows = instStdPow_list[diag]
+        instTSIpows_ratios = instTSIppow_AvePow_ratio_list[diag]
+        instStdAve_ratios = instPow_Std_Ave_ratio_list[diag]
+        
+        TSI_ppow_ave[diag] = [0.0,0.0,0.0,0.0] #element for bat, rest, out, kin respectively
+        TSI_ppow_std[diag] = [0.0,0.0,0.0,0.0]
+        TSI_ppow_num[diag] = [0.0,0.0,0.0,0.0]
+        instAvePow_ave[diag] = [0.0,0.0,0.0,0.0]
+        instAvePow_std[diag] = [0.0,0.0,0.0,0.0]
+        instAvePow_num[diag] = [0.0,0.0,0.0,0.0]
+        instStdPow_ave[diag] = [0.0,0.0,0.0,0.0]
+        instStdPow_std[diag] = [0.0,0.0,0.0,0.0]
+        instStdPow_num[diag] = [0.0,0.0,0.0,0.0]
+        
+        instTSIppow_AvePow_ratio_ave[diag] = [0.0,0.0,0.0,0.0]
+        instTSIppow_AvePow_ratio_std[diag] = [0.0,0.0,0.0,0.0]
+        instTSIppow_AvePow_ratio_num[diag] = [0.0,0.0,0.0,0.0]
+
+        instPow_Std_Ave_ratio_ave[diag] = [0.0,0.0,0.0,0.0]
+        instPow_Std_Ave_ratio_std[diag] = [0.0,0.0,0.0,0.0]
+        instPow_Std_Ave_ratio_num[diag] = [0.0,0.0,0.0,0.0]
+        
+        for i in range(4):#go through each tremor type
+            TSI_ppow_ave[diag][i] = average(TSI_ppow[i])
+            instAvePow_ave[diag][i] = average(instPows[i])
+            instStdPow_ave[diag][i] = average(instStdPows[i])
+            instTSIppow_AvePow_ratio_ave[diag][i] = average(instTSIpows_ratios[i])
+            instPow_Std_Ave_ratio_ave[diag][i] = average(instStdAve_ratios[i])
+            
+            TSI_ppow_std[diag][i] = stddev(TSI_ppow[i],TSI_ppow_ave[diag][i])
+            instAvePow_std[diag][i] = stddev(instPows[i],instAvePow_ave[diag][i])
+            instStdPow_std[diag][i] = stddev(instStdPows[i],instStdPow_ave[diag][i])
+            instTSIppow_AvePow_ratio_std[diag][i] = stddev(instTSIpows_ratios[i],instTSIppow_AvePow_ratio_ave[diag][i])
+            instPow_Std_Ave_ratio_std[diag][i] = stddev(instStdAve_ratios[i],instPow_Std_Ave_ratio_ave[diag][i])
+            
+            TSI_ppow_num[diag] = len((TSI_ppow_list[diag])[i])
+            instAvePow_num[diag] = len((instAvePow_list[diag])[i])
+            instStdPow_num[diag] = len((instStdPow_list[diag])[i])   
+            instTSIppow_AvePow_ratio_num[diag] = len((instTSIppow_AvePow_ratio_list[diag])[i])
+            instPow_Std_Ave_ratio_num[diag] = len((instPow_Std_Ave_ratio_list[diag])[i])
+        
+    #save time-series analysis to file
+    os.chdir(PATH)
+    with open("timeseries_analysis.csv","w") as o:
+        #Write main freqs
+        o.write("Average TSI,,,,,,Ave Inst. Freq")
+        o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
+        for diag in TSI_ave:
+            o.write(str(diag)+",")
+            frs = TSI_ave[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = instAveFreq_ave[diag]
+            o.write(",")
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+            
+        o.write("Stddev TSI,,,,,,Stddev Inst. Freq")
+        o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
+        for diag in TSI_std:
+            o.write(str(diag)+",")
+            frs = TSI_std[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = instAveFreq_std[diag]
+            o.write(",")
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        o.write("Num TSI,,,,,,Num Inst. Freq")
+        o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
+        for diag in TSI_std:
+            o.write(str(diag)+",")
+            frs = TSI_num[diag]
+            for i in range(4):
+                o.write(str(frs)+",")
+            frs = instAveFreq_num[diag]
+            o.write(",")
+            for i in range(4):
+                o.write(str(frs)+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        o.write("SEM TSI,,,,,,SEM Inst. Freq")
+        o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
+        for diag in TSI_std:
+            o.write(str(diag)+",")
+            frs1 = TSI_std[diag]
+            frs2 = TSI_num[diag]
+            for i in range(len(frs1)):
+                if frs2 > 0:
+                    o.write(str(frs1[i]/(math.sqrt(frs2)))+",")
+                else:
+                    o.write(",")
+            frs1 = instAveFreq_std[diag]
+            frs2 = instAveFreq_num[diag]
+            o.write(",")
+            for i in range(len(frs1)):
+                if frs2 > 0:
+                    o.write(str(frs1[i]/(math.sqrt(frs2)))+",")
+                else:
+                    o.write(",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        o.write("Average TSI Peak Power,,,,,,Ave Inst. Peak Power,,,,,Stddev Inst. Peak Power (within file),,,,,Stddev Inst. Peak Power (across files)")
+        o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
+        for diag in TSI_ppow_ave:
+            o.write(str(diag)+",")
+            frs = TSI_ppow_ave[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = instAvePow_ave[diag]
+            o.write(",")
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = instStdPow_ave[diag]
+            o.write(",")
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = instAvePow_std[diag]
+            o.write(",")
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        o.write("Average TSI:AveragePower ratio,,,,,,Ave Peak Power std:ave ratio")
+        o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
+        for diag in instTSIppow_AvePow_ratio_ave:
+            o.write(str(diag)+",")
+            frs = instTSIppow_AvePow_ratio_ave[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = instPow_Std_Ave_ratio_ave[diag]
+            o.write(",")
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        o.write("Stddev TSI Peak Power,,,,,,Stddev Inst. Peak Power,,,,,Stddev of stddev Inst. Peak Power ")
+        o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
+        for diag in TSI_ppow_std:
+            o.write(str(diag)+",")
+            frs = TSI_ppow_std[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = instAvePow_std[diag]
+            o.write(",")
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = instStdPow_std[diag]
+            o.write(",")
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        o.write("Stddev TSI:AveragePower ratio,,,,,,Stddev Peak Power std:ave ratio")
+        o.write("\nDiagnosis,Bat,Kin,Out,Rest,,Bat,Kin,Out,Rest\n")
+        for diag in instTSIppow_AvePow_ratio_std:
+            o.write(str(diag)+",")
+            frs = instTSIppow_AvePow_ratio_std[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = instPow_Std_Ave_ratio_std[diag]
+            o.write(",")
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+            
+        
+    #Freq analysis
+    for diag in freq_list:
+        freqs = freq_list[diag]
+        #Each list has 4-element array for x,y,z,y respectively
+        freq_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+        freq_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+        
+        #for each axes:
+        freqX = freqX_list[diag]
+        freqY = freqY_list[diag]
+        freqZ = freqZ_list[diag]
+        freqU = freqU_list[diag]
+        
+        freqX_ave[diag] = [0.0,0.0,0.0,0.0]
+        freqX_std[diag] = [0.0,0.0,0.0,0.0]
+        freqX_num[diag] = [0.0,0.0,0.0,0.0]
+        freqY_ave[diag] = [0.0,0.0,0.0,0.0]
+        freqY_std[diag] = [0.0,0.0,0.0,0.0]
+        freqY_num[diag] = [0.0,0.0,0.0,0.0]
+        freqZ_ave[diag] = [0.0,0.0,0.0,0.0]
+        freqZ_std[diag] = [0.0,0.0,0.0,0.0]
+        freqZ_num[diag] = [0.0,0.0,0.0,0.0]
+        freqU_ave[diag] = [0.0,0.0,0.0,0.0]
+        freqU_std[diag] = [0.0,0.0,0.0,0.0]
+        freqU_num[diag] = [0.0,0.0,0.0,0.0]
         
         
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    o.write("Diagnosis,Bat Num X_freq,Bat Num Y_freq,Bat Num Z_freq,Bat Num U_freq,Kin Num X_freq,Kin Num Y_freq,Kin Num Z_freq,Kin Num U_freq,Out Num X_freq,Out Num Y_freq,Out Num Z_freq,Out Num U_freq,Rest Num X_freq,Rest Num Y_freq,Rest Num Z_freq,Rest Num U_freq\n")
-    for diag in freq_ave:
-        o.write(str(diag)+",")
-        # frs = freq_std[diag]
-        # for i in range(len(frs)):
-        #     for j in range(len(frs[i])):
-        #         o.write(str(frs[i][j])+",")
-        # o.write("\n")
-        # o.write(str(diag)+",")
-        frs = freqX_num[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = freqY_num[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = freqZ_num[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        frs = freqU_num[diag]
-        for i in range(len(frs)):
-            o.write(str(frs[i])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    #Write max pow of main freqs
-    o.write("Max Power of Main Freqs,\nDiagnosis,Bat Average X_pow,Bat Average Y_pow,Bat Average Z_pow,Bat Average U_pow,Kin Average X_pow,Kin Average Y_pow,Kin Average Z_pow,Kin Average U_pow,Out Average X_pow,Out Average Y_pow,Out Average Z_pow,Out Average U_pow,Rest Average X_pow,Rest Average Y_pow,Rest Average Z_pow,Rest Average U_pow\n")
-    for diag in mpow_ave:
-        o.write(str(diag)+",")
-        frs = mpow_ave[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                o.write(str(frs[i][j])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
+        mpows = mpow_list[diag]
+        #Each list has 4-element array for x,y,z,y respectively
+        mpow_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+        mpow_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
         
-    o.write("Diagnosis,Bat Std X_pow,Bat Std Y_pow,Bat Std Z_pow,Bat Std U_pow,Kin Std X_pow,Kin Std Y_pow,Kin Std Z_pow,Kin Std U_pow,Out Std X_pow,Out Std Y_pow,Out Std Z_pow,Out Std U_pow,Rest Std X_pow,Rest Std Y_pow,Rest Std Z_pow,Rest Std U_pow\n")
-    for diag in mpow_std:
-        o.write(str(diag)+",")
-        frs = mpow_std[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                o.write(str(frs[i][j])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    o.write("Diagnosis,Bat CV X_pow,Bat CV Y_pow,Bat CV Z_pow,Bat CV U_pow,Kin CV X_pow,Kin CV Y_pow,Kin CV Z_pow,Kin CV U_pow,Out CV X_pow,Out CV Y_pow,Out CV Z_pow,Out CV U_pow,Rest CV X_pow,Rest CV Y_pow,Rest CV Z_pow,Rest CV U_pow\n")
-    for diag in mpow_ave:
-        o.write(str(diag)+",")
-        frs = mpow_std[diag]
-        frs2 = mpow_ave[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                if frs2[i][j]>0:
-                    o.write(str(frs[i][j]/frs2[i][j])+",")
+        RPC = RPC_list[diag]
+        RPC_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+        RPC_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+        
+        RE_bat = RE_bat_list[diag]
+        RE_bat_ave[diag] = 0.0
+        RE_out_ave[diag] = 0.0
+        RE_bat_std[diag] = 0.0
+        RE_out_std[diag] = 0.0
+        
+        harm = harm_list[diag]
+        harm_pow = harm_pow_list[diag]
+        #Each list has 4-element array for x,y,z,y respectively
+        harm_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+        harm_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+        
+        harm_pow_ave[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+        harm_pow_std[diag] = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+        
+        peakX_sorted[diag] = [[],[],[],[]]
+        peakY_sorted[diag] = [[],[],[],[]]
+        peakZ_sorted[diag] = [[],[],[],[]]
+        peakU_sorted[diag] = [[],[],[],[]]
+        
+        peakX_sorted_ave[diag] = [[],[],[],[]]
+        peakX_sorted_num[diag] = [[],[],[],[]] #num of peaks within i-th peak # ave
+        peakX_sorted_std[diag] = [[],[],[],[]]
+        peakY_sorted_ave[diag] = [[],[],[],[]]
+        peakY_sorted_num[diag] = [[],[],[],[]]
+        peakY_sorted_std[diag] = [[],[],[],[]]
+        peakZ_sorted_ave[diag] = [[],[],[],[]]
+        peakZ_sorted_num[diag] = [[],[],[],[]]
+        peakZ_sorted_std[diag] = [[],[],[],[]]
+        peakU_sorted_ave[diag] = [[],[],[],[]]
+        peakU_sorted_num[diag] = [[],[],[],[]]
+        peakU_sorted_std[diag] = [[],[],[],[]]
+        
+        freq_num[diag] = len((freq_list[diag])[0])
+        mpow_num[diag] = len((mpow_list[diag])[0])
+        
+        #for each axis: fix this
+        # freqX_num[diag] = len((freqX_list[diag])[0])
+        # freqY_num[diag] = len((freqY_list[diag])[0])
+        # freqZ_num[diag] = len((freqZ_list[diag])[0])
+        # freqU_num[diag] = len((freqU_list[diag])[0])
+        
+        
+        print(diag+": "+str(freq_num[diag]))
+        
+        RE_bat_ave[diag] = average(RE_bat_list[diag])
+        RE_bat_std[diag] = stddev(RE_bat_list[diag],RE_bat_ave[diag])
+        RE_out_ave[diag] = average(RE_out_list[diag])
+        RE_out_std[diag] = stddev(RE_out_list[diag],RE_out_ave[diag])
+        
+        for i in range(4):#go through each tremor type
+            if [] not in freq_list[diag]:
+                freq_ave[diag][i] = ave(freqs[i])
+                freq_std[diag][i] = std(freqs[i],freq_ave[diag][i])
+                
+                mpow_ave[diag][i] = ave(mpows[i])
+                mpow_std[diag][i] = std(mpows[i],mpow_ave[diag][i])
+                
+                RPC_ave[diag][i] = ave(RPC[i])
+                RPC_std[diag][i] = std(RPC[i],RPC_ave[diag][i])
+                
+                harm_ave[diag][i] = ave(harm[i])
+                harm_std[diag][i] = std(harm[i],harm_ave[diag][i])
+            
+                harm_pow_ave[diag][i] = ave(harm_pow[i])
+                harm_pow_std[diag][i] = std(harm_pow[i],harm_pow_ave[diag][i])
+            if [] not in freqX_list[diag]:
+                freqX_ave[diag][i] = average(freqX[i])
+                freqY_ave[diag][i] = average(freqY[i])
+                freqZ_ave[diag][i] = average(freqZ[i])
+                freqU_ave[diag][i] = average(freqU[i])
+                freqX_std[diag][i] = stddev(freqX[i],freqX_ave[diag][i])
+                freqY_std[diag][i] = stddev(freqY[i],freqY_ave[diag][i])
+                freqZ_std[diag][i] = stddev(freqZ[i],freqZ_ave[diag][i])
+                freqU_std[diag][i] = stddev(freqU[i],freqU_ave[diag][i])
+                freqX_num[diag][i] = len(freqX[i])
+                freqY_num[diag][i] = len(freqY[i])
+                freqZ_num[diag][i] = len(freqZ[i])
+                freqU_num[diag][i] = len(freqU[i])
+                
+                # #Print for checking
+                # if i==2 and diag =='PD':
+                #     for j in range(len(freqX[i])):
+                #         print(str(freqX[i][j])+"\n")
+            
+            #Sort peaks   
+            num_type = min(len(peakX_list[diag][i]),len(peakY_list[diag][i]),len(peakZ_list[diag][i])) #number of files in each diag
+            for j in range(num_type):
+                peaksX = peakX_list[diag][i][j] #peaks in the given file
+                peaksY = peakY_list[diag][i][j]
+                peaksZ = peakZ_list[diag][i][j]
+                peaksU = peakZ_list[diag][i][j]
+                for k in range(len(peaksX)):
+                    if (k+1) > len(peakX_sorted[diag][i]):
+                        peakX_sorted[diag][i].append([])#add position for kth-peak
+                    peakX_sorted[diag][i][k].append(peaksX[k])
+                for k in range(len(peaksY)):
+                    if (k+1) > len(peakY_sorted[diag][i]):
+                        peakY_sorted[diag][i].append([])#add position for kth-peak
+                    peakY_sorted[diag][i][k].append(peaksY[k])
+                for k in range(len(peaksZ)):
+                    if (k+1) > len(peakZ_sorted[diag][i]):
+                        peakZ_sorted[diag][i].append([])#add position for kth-peak
+                    peakZ_sorted[diag][i][k].append(peaksZ[k])
+                for k in range(len(peaksU)):
+                    if (k+1) > len(peakU_sorted[diag][i]):
+                        peakU_sorted[diag][i].append([])#add position for kth-peak
+                    peakU_sorted[diag][i][k].append(peaksU[k])
+            
+            #average the individual peak data
+            for j in range(len(peakX_sorted[diag][i])):
+                if (j+1) > len(peakX_sorted_ave[diag][i]):
+                    peakX_sorted_ave[diag][i].append([])
+                    peakX_sorted_num[diag][i].append([])
+                    peakX_sorted_std[diag][i].append([])
+                peakX_sorted_ave[diag][i][j] = ave(peakX_sorted[diag][i][j])
+                peakX_sorted_num[diag][i][j] = len(peakX_sorted[diag][i][j])
+                peakX_sorted_std[diag][i][j] = std(peakX_sorted[diag][i][j],peakX_sorted_ave[diag][i][j])
+            for j in range(len(peakY_sorted[diag][i])):
+                if (j+1) > len(peakY_sorted_ave[diag][i]):
+                    peakY_sorted_ave[diag][i].append([])
+                    peakY_sorted_num[diag][i].append([])
+                    peakY_sorted_std[diag][i].append([])
+                peakY_sorted_ave[diag][i][j] = ave(peakY_sorted[diag][i][j])
+                peakY_sorted_num[diag][i][j] = len(peakY_sorted[diag][i][j])
+                peakY_sorted_std[diag][i][j] = std(peakY_sorted[diag][i][j],peakY_sorted_ave[diag][i][j])
+            for j in range(len(peakZ_sorted[diag][i])):
+                if (j+1) > len(peakZ_sorted_ave[diag][i]):
+                    peakZ_sorted_ave[diag][i].append([])
+                    peakZ_sorted_num[diag][i].append([])
+                    peakZ_sorted_std[diag][i].append([])
+                peakZ_sorted_ave[diag][i][j] = ave(peakZ_sorted[diag][i][j])
+                peakZ_sorted_num[diag][i][j] = len(peakZ_sorted[diag][i][j])
+                peakZ_sorted_std[diag][i][j] = std(peakZ_sorted[diag][i][j],peakZ_sorted_ave[diag][i][j])
+            #Composite peaks:
+            for j in range(len(peakU_sorted[diag][i])):
+                if (j+1) > len(peakU_sorted_ave[diag][i]):
+                    peakU_sorted_ave[diag][i].append([])
+                    peakU_sorted_num[diag][i].append([])
+                    peakU_sorted_std[diag][i].append([])
+                peakU_sorted_ave[diag][i][j] = ave(peakU_sorted[diag][i][j])
+                peakU_sorted_num[diag][i][j] = len(peakU_sorted[diag][i][j])
+                peakU_sorted_std[diag][i][j] = std(peakU_sorted[diag][i][j],peakU_sorted_ave[diag][i][j])
+
+
+    freq_ave_control = []
+    freq_std_control = []
+    freq_num_control = 0
+    mpow_ave_control = []
+    mpow_std_control = []
+    mpow_num_control = 0
+    harm_ave_control = []
+    harm_std_control = []
+    harm_num_control = 0
+
+    freqs_control = freq_list_control
+    #each array in the list has 4 elements, since x,y,z, & u
+    freq_ave_control = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+    freq_std_control = [[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]]
+    freq_num_control = len(freqs_control[0])
+    #print(freq_num_control)
+
+    for i in range(4):
+        freq_ave_control[i] = ave(freqs_control[i])
+        freq_std_control[i] = std(freqs_control[i],freq_ave_control[i])
+
+    #Num of patients in each diagnosis group
+    os.chdir(PATH)
+    with open("num_patients.csv","w") as o:
+        diag_keys = basic_diagnoses_nums.keys()
+        o.write("Diagnosis,num of patients\n")
+        sum = 0
+        for i in basic_diagnoses_nums:
+            o.write(str(i)+","+str(basic_diagnoses_nums[i])+"\n")
+            sum += basic_diagnoses_nums[i]
+        o.write("Total,"+str(sum))
+
+    os.chdir(PATH)
+    with open("tremor_analysis.csv","w") as o:
+        #Write main freqs
+        o.write("Main Freqs,\nDiagnosis,Bat Average X_freq,Bat Average Y_freq,Bat Average Z_freq,Bat Average U_freq,Kin Average X_freq,Kin Average Y_freq,Kin Average Z_freq,Kin Average U_freq,Out Average X_freq,Out Average Y_freq,Out Average Z_freq,Out Average U_freq,Rest Average X_freq,Rest Average Y_freq,Rest Average Z_freq,Rest Average U_freq\n")
+        for diag in freq_ave:
+            o.write(str(diag)+",")
+            # frs = freq_ave[diag]
+            # for i in range(len(frs)):
+            #     for j in range(len(frs[i])):
+            #         o.write(str(frs[i][j])+",")
+            frs = freqX_ave[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = freqY_ave[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = freqZ_ave[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = freqU_ave[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+            
+        o.write("Diagnosis,Bat Std X_freq,Bat Std Y_freq,Bat Std Z_freq,Bat Std U_freq,Kin Std X_freq,Kin Std Y_freq,Kin Std Z_freq,Kin Std U_freq,Out Std X_freq,Out Std Y_freq,Out Std Z_freq,Out Std U_freq,Rest Std X_freq,Rest Std Y_freq,Rest Std Z_freq,Rest Std U_freq\n")
+        for diag in freq_std:
+            o.write(str(diag)+",")
+            # frs = freq_std[diag]
+            # for i in range(len(frs)):
+            #     for j in range(len(frs[i])):
+            #         o.write(str(frs[i][j])+",")
+            # o.write("\n")
+            # o.write(str(diag)+",")
+            frs = freqX_std[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = freqY_std[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = freqZ_std[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = freqU_std[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        o.write("Diagnosis,Bat CV X_freq,Bat CV Y_freq,Bat CV Z_freq,Bat CV U_freq,Kin CV X_freq,Kin CV Y_freq,Kin CV Z_freq,Kin CV U_freq,Out CV X_freq,Out CV Y_freq,Out CV Z_freq,Out CV U_freq,Rest CV X_freq,Rest CV Y_freq,Rest CV Z_freq,Rest CV U_freq\n")
+        for diag in freq_std:
+            o.write(str(diag)+",")
+            # frs = freq_std[diag]
+            # frs2 = freq_ave[diag]
+            # for i in range(len(frs)):
+            #     for j in range(len(frs[i])):
+            #         if frs2[i][j]>0:
+            #             o.write(str(frs[i][j]/frs2[i][j])+",")
+            #         else:
+            #             o.write("0.0,")
+            frs = freqX_std[diag]
+            frs2 = freqX_ave[diag]
+            for i in range(len(frs)):
+                if frs2[i]>0:
+                    o.write(str(frs[i]/frs2[i])+",")
                 else:
                     o.write("0.0,")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    #Write harmonics
-    o.write("Harmonics,\nDiagnosis,Bat Average X_harm,Bat Average Y_harm,Bat Average Z_harm,Bat Average U_harm,Kin Average X_harm,Kin Average Y_harm,Kin Average Z_harm,Kin Average U_harm,Out Average X_harm,Out Average Y_harm,Out Average Z_harm,Out Average U_harm,Rest Average X_harm,Rest Average Y_harm,Rest Average Z_harm,Rest Average U_harm\n")
-    for diag in harm_ave:
-        o.write(str(diag)+",")
-        frs = harm_ave[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                o.write(str(frs[i][j])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-        
-    o.write("Diagnosis,Bat Std X_harm,Bat Std Y_harm,Bat Std Z_harm,Bat Std U_harm,Kin Std X_harm,Kin Std Y_harm,Kin Std Z_harm,Kin Std U_harm,Out Std X_harm,Out Std Y_harm,Out Std Z_harm,Out Std U_harm,Rest Std X_harm,Rest Std Y_harm,Rest Std Z_harm,Rest Std U_harm\n")
-    for diag in harm_std:
-        o.write(str(diag)+",")
-        frs = harm_std[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                o.write(str(frs[i][j])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    #Harmonic power
-    o.write("1st Harmonic Power,\nDiagnosis,Bat Average X_harm,Bat Average Y_harm,Bat Average Z_harm,Bat Average U_harm,Kin Average X_harm,Kin Average Y_harm,Kin Average Z_harm,Kin Average U_harm,Out Average X_harm,Out Average Y_harm,Out Average Z_harm,Out Average U_harm,Rest Average X_harm,Rest Average Y_harm,Rest Average Z_harm,Rest Average U_harm\n")
-    for diag in harm_pow_ave:
-        o.write(str(diag)+",")
-        frs = harm_pow_ave[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                o.write(str(frs[i][j])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-        
-    o.write("Diagnosis,Bat Std X_harm,Bat Std Y_harm,Bat Std Z_harm,Bat Std U_harm,Kin Std X_harm,Kin Std Y_harm,Kin Std Z_harm,Kin Std U_harm,Out Std X_harm,Out Std Y_harm,Out Std Z_harm,Out Std U_harm,Rest Std X_harm,Rest Std Y_harm,Rest Std Z_harm,Rest Std U_harm\n")
-    for diag in harm_std:
-        o.write(str(diag)+",")
-        frs = harm_pow_std[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                o.write(str(frs[i][j])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-    
-    #RPC
-    o.write("Relative Power Contribution,\nDiagnosis,Bat Average X,Bat Average Y,Bat Average Z,Bat Average U,Kin Average X,Kin Average Y,Kin Average Z,Kin Average U,Out Average X,Out Average Y,Out Average Z,Out Average U,Rest Average X,Rest Average Y,Rest Average Z,Rest Average U\n")
-    for diag in RPC_ave:
-        o.write(str(diag)+",")
-        frs = RPC_ave[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                o.write(str(frs[i][j])+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-        
-    o.write("Diagnosis,Bat Std X,Bat Std Y,Bat Std Z,Bat Std U,Kin Std X,Kin Std Y,Kin Std Z,Kin Std U,Out Std X,Out Std Y,Out Std Z,Out Std U,Rest Std X,Rest Std Y,Rest Std Z,Rest Std U\n")
-    for diag in RPC_std:
-        o.write(str(diag)+",")
-        frs = RPC_std[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                o.write(str(frs[i][j])+",")
-        o.write("\n")
-    
-    o.write("\n")
-    
-    #Relative Energy (RE)
-    o.write("Relative Energy,\nDiagnosis,RE_bat,RE_out,RE_bat(std),RE_out(std)\n")
-    for diag in RE_bat_ave:
-        o.write(str(diag)+",")
-        frs = RE_bat_ave[diag]
-        o.write(str(frs)+",")
-        frs = RE_out_ave[diag]
-        o.write(str(frs)+",")
-        frs = RE_bat_std[diag]
-        o.write(str(frs)+",")
-        frs = RE_out_std[diag]
-        o.write(str(frs)+",")
-        o.write("\n")
-    
-    o.write("\n\n")
-        
-    o.write("Diagnosis,Bat Std X,Bat Std Y,Bat Std Z,Bat Std U,Kin Std X,Kin Std Y,Kin Std Z,Kin Std U,Out Std X,Out Std Y,Out Std Z,Out Std U,Rest Std X,Rest Std Y,Rest Std Z,Rest Std U\n")
-    for diag in RPC_std:
-        o.write(str(diag)+",")
-        frs = RPC_std[diag]
-        for i in range(len(frs)):
-            for j in range(len(frs[i])):
-                o.write(str(frs[i][j])+",")
-        o.write("\n")
-    
-    o.write("\n")
-    
-    #Control
-    o.write("\nControl,Bat Average X_freq,Bat Average Y_freq,Bat Average Z_freq,Bat Average U_freq,Kin Average X_freq,Kin Average Y_freq,Kin Average Z_freq,Kin Average U_freq,Out Average X_freq,Out Average Y_freq,Out Average Z_freq,Out Average U_freq,Rest Average X_freq,Rest Average Y_freq,Rest Average Z_freq,Rest Average U_freq\n")
-    o.write("Control,")
-    frs = freq_ave_control
-    for i in range(len(frs)):
-        for j in range(len(frs[i])):
-            o.write(str(frs[i][j])+",")
-    o.write("\n")
-    
-    o.write("\n")
-    
-    o.write("\nControl,Bat Std X_freq,Bat Std Y_freq,Bat Std Z_freq,Bat Std U_freq,Kin Std X_freq,Kin Std Y_freq,Kin Std Z_freq,Kin Std U_freq,Out Std X_freq,Out Std Y_freq,Out Std Z_freq,Out Std U_freq,Rest Std X_freq,Rest Std Y_freq,Rest Std Z_freq,Rest Std U_freq\n")
-    o.write("Control,")
-    frs = freq_std_control
-    for i in range(len(frs)):
-        for j in range(len(frs[i])):
-            o.write(str(frs[i][j])+",")
-    o.write("\n")
-    
-    o.write("\n")
-    
-    #Write peak data:
-    for diag in freq_list:
-        peakX_ave = peakX_sorted_ave[diag]
-        peakX_std = peakX_sorted_std[diag]
-        peakX_num = peakX_sorted_num[diag]
-        peakY_ave = peakY_sorted_ave[diag]
-        peakY_std = peakY_sorted_std[diag]
-        peakY_num = peakY_sorted_num[diag]
-        peakZ_ave = peakZ_sorted_ave[diag]
-        peakZ_std = peakZ_sorted_std[diag]
-        peakZ_num = peakZ_sorted_num[diag]
-        peakU_ave = peakU_sorted_ave[diag]
-        peakU_std = peakU_sorted_std[diag]
-        peakU_num = peakU_sorted_num[diag]
-        o.write("\n"+ diag+" Average Peak Data,,,,,,"+diag+" Std Peak Data")
-        for i in range(len(peakX_ave)):
-            tremor = tremor_types[i]
-            o.write("\n"+tremor+":")
-            o.write("\nPeak #,num peaks X,p_startX,p_endX,p_maxX,Power at Max X,Peak Area X,p_widthX,p_startX (std),p_endX (std),p_maxX (std),Power at Max X (std),Peak Area X (std),p_widthX (std),")
-            o.write("num peaks Y,p_startY,p_endY,p_maxY,Power at Max Y,Peak Area Y,p_widthY,p_startY (std),p_endY (std),p_maxY (std),Power at Max Y (std),Peak Area Y (std),p_widthY (std),")
-            o.write("num peaks Z,p_startZ,p_endZ,p_maxZ,Power at Max Z,Peak Area Z,p_widthZ,p_startZ (std),p_endZ (std),p_maxZ (std),Power at Max Z (std),Peak Area Z (std),p_widthZ (std),")
-            o.write("num peaks U,p_startU,p_endU,p_maxU,Power at Max U,Peak Area U,p_widthU,p_startU (std),p_endU (std),p_maxU (std),Power at Max U (std),Peak Area U (std),p_widthU (std),\n")
+            frs = freqY_std[diag]
+            frs2 = freqY_ave[diag]
+            for i in range(len(frs)):
+                if frs2[i]>0:
+                    o.write(str(frs[i]/frs2[i])+",")
+                else:
+                    o.write("0.0,")
+            frs = freqZ_std[diag]
+            frs2 = freqZ_ave[diag]
+            for i in range(len(frs)):
+                if frs2[i]>0:
+                    o.write(str(frs[i]/frs2[i])+",")
+                else:
+                    o.write("0.0,")
+            frs = freqU_std[diag]
+            frs2 = freqU_ave[diag]
+            for i in range(len(frs)):
+                if frs2[i]>0:
+                    o.write(str(frs[i]/frs2[i])+",")
+                else:
+                    o.write("0.0,")
             
-            maxNumPeaks = max(len(peakX_ave[i]),len(peakY_ave[i]),len(peakZ_ave[i]),len(peakU_ave[i])) #to determine how many rows needed for max number of peaks
-            for j in range(maxNumPeaks):
-                o.write(str(j+1)+",");
-                
-                if j >= len(peakX_ave[i]):
-                    for k in range(13):
-                        o.write(",")
-                else:
-                    o.write(str(peakX_num[i][j])+",")
-                    for k in range(6):
-                        o.write(str(peakX_ave[i][j][k]) + ",")
-                    for k in range(6):
-                        o.write(str(peakX_std[i][j][k]) + ",")
-                
-                if j >= len(peakY_ave[i]):
-                    for k in range(13):
-                        o.write(",")
-                else:
-                    o.write(str(peakY_num[i][j])+",")
-                    for k in range(6):
-                        o.write(str(peakY_ave[i][j][k]) + ",")
-                    for k in range(6):
-                        o.write(str(peakY_std[i][j][k]) + ",")
-                
-                if j >= len(peakZ_ave[i]):
-                    for k in range(13):
-                        o.write(",")
-                else:
-                    o.write(str(peakZ_num[i][j])+",")
-                    for k in range(6):
-                        o.write(str(peakZ_ave[i][j][k]) + ",")
-                    for k in range(6):
-                        o.write(str(peakZ_std[i][j][k]) + ",")
-                
-                #'u' (composite) peak info
-                if j >= len(peakU_ave[i]):
-                    for k in range(13):
-                        o.write(",")
-                else:
-                    o.write(str(peakU_num[i][j])+",")
-                    for k in range(6):
-                        o.write(str(peakU_ave[i][j][k]) + ",")
-                    for k in range(6):
-                        o.write(str(peakU_std[i][j][k]) + ",")
-                o.write("\n")
+            
             o.write("\n")
-    
+        
+        o.write("\n\n")
+        
+        o.write("Diagnosis,Bat Num X_freq,Bat Num Y_freq,Bat Num Z_freq,Bat Num U_freq,Kin Num X_freq,Kin Num Y_freq,Kin Num Z_freq,Kin Num U_freq,Out Num X_freq,Out Num Y_freq,Out Num Z_freq,Out Num U_freq,Rest Num X_freq,Rest Num Y_freq,Rest Num Z_freq,Rest Num U_freq\n")
+        for diag in freq_ave:
+            o.write(str(diag)+",")
+            # frs = freq_std[diag]
+            # for i in range(len(frs)):
+            #     for j in range(len(frs[i])):
+            #         o.write(str(frs[i][j])+",")
+            # o.write("\n")
+            # o.write(str(diag)+",")
+            frs = freqX_num[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = freqY_num[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = freqZ_num[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            frs = freqU_num[diag]
+            for i in range(len(frs)):
+                o.write(str(frs[i])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        #Write max pow of main freqs
+        o.write("Max Power of Main Freqs,\nDiagnosis,Bat Average X_pow,Bat Average Y_pow,Bat Average Z_pow,Bat Average U_pow,Kin Average X_pow,Kin Average Y_pow,Kin Average Z_pow,Kin Average U_pow,Out Average X_pow,Out Average Y_pow,Out Average Z_pow,Out Average U_pow,Rest Average X_pow,Rest Average Y_pow,Rest Average Z_pow,Rest Average U_pow\n")
+        for diag in mpow_ave:
+            o.write(str(diag)+",")
+            frs = mpow_ave[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    o.write(str(frs[i][j])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+            
+        o.write("Diagnosis,Bat Std X_pow,Bat Std Y_pow,Bat Std Z_pow,Bat Std U_pow,Kin Std X_pow,Kin Std Y_pow,Kin Std Z_pow,Kin Std U_pow,Out Std X_pow,Out Std Y_pow,Out Std Z_pow,Out Std U_pow,Rest Std X_pow,Rest Std Y_pow,Rest Std Z_pow,Rest Std U_pow\n")
+        for diag in mpow_std:
+            o.write(str(diag)+",")
+            frs = mpow_std[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    o.write(str(frs[i][j])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        o.write("Diagnosis,Bat CV X_pow,Bat CV Y_pow,Bat CV Z_pow,Bat CV U_pow,Kin CV X_pow,Kin CV Y_pow,Kin CV Z_pow,Kin CV U_pow,Out CV X_pow,Out CV Y_pow,Out CV Z_pow,Out CV U_pow,Rest CV X_pow,Rest CV Y_pow,Rest CV Z_pow,Rest CV U_pow\n")
+        for diag in mpow_ave:
+            o.write(str(diag)+",")
+            frs = mpow_std[diag]
+            frs2 = mpow_ave[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    if frs2[i][j]>0:
+                        o.write(str(frs[i][j]/frs2[i][j])+",")
+                    else:
+                        o.write("0.0,")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        #Write harmonics
+        o.write("Harmonics,\nDiagnosis,Bat Average X_harm,Bat Average Y_harm,Bat Average Z_harm,Bat Average U_harm,Kin Average X_harm,Kin Average Y_harm,Kin Average Z_harm,Kin Average U_harm,Out Average X_harm,Out Average Y_harm,Out Average Z_harm,Out Average U_harm,Rest Average X_harm,Rest Average Y_harm,Rest Average Z_harm,Rest Average U_harm\n")
+        for diag in harm_ave:
+            o.write(str(diag)+",")
+            frs = harm_ave[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    o.write(str(frs[i][j])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+            
+        o.write("Diagnosis,Bat Std X_harm,Bat Std Y_harm,Bat Std Z_harm,Bat Std U_harm,Kin Std X_harm,Kin Std Y_harm,Kin Std Z_harm,Kin Std U_harm,Out Std X_harm,Out Std Y_harm,Out Std Z_harm,Out Std U_harm,Rest Std X_harm,Rest Std Y_harm,Rest Std Z_harm,Rest Std U_harm\n")
+        for diag in harm_std:
+            o.write(str(diag)+",")
+            frs = harm_std[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    o.write(str(frs[i][j])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        #Harmonic power
+        o.write("1st Harmonic Power,\nDiagnosis,Bat Average X_harm,Bat Average Y_harm,Bat Average Z_harm,Bat Average U_harm,Kin Average X_harm,Kin Average Y_harm,Kin Average Z_harm,Kin Average U_harm,Out Average X_harm,Out Average Y_harm,Out Average Z_harm,Out Average U_harm,Rest Average X_harm,Rest Average Y_harm,Rest Average Z_harm,Rest Average U_harm\n")
+        for diag in harm_pow_ave:
+            o.write(str(diag)+",")
+            frs = harm_pow_ave[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    o.write(str(frs[i][j])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+            
+        o.write("Diagnosis,Bat Std X_harm,Bat Std Y_harm,Bat Std Z_harm,Bat Std U_harm,Kin Std X_harm,Kin Std Y_harm,Kin Std Z_harm,Kin Std U_harm,Out Std X_harm,Out Std Y_harm,Out Std Z_harm,Out Std U_harm,Rest Std X_harm,Rest Std Y_harm,Rest Std Z_harm,Rest Std U_harm\n")
+        for diag in harm_std:
+            o.write(str(diag)+",")
+            frs = harm_pow_std[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    o.write(str(frs[i][j])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+        
+        #RPC
+        o.write("Relative Power Contribution,\nDiagnosis,Bat Average X,Bat Average Y,Bat Average Z,Bat Average U,Kin Average X,Kin Average Y,Kin Average Z,Kin Average U,Out Average X,Out Average Y,Out Average Z,Out Average U,Rest Average X,Rest Average Y,Rest Average Z,Rest Average U\n")
+        for diag in RPC_ave:
+            o.write(str(diag)+",")
+            frs = RPC_ave[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    o.write(str(frs[i][j])+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+            
+        o.write("Diagnosis,Bat Std X,Bat Std Y,Bat Std Z,Bat Std U,Kin Std X,Kin Std Y,Kin Std Z,Kin Std U,Out Std X,Out Std Y,Out Std Z,Out Std U,Rest Std X,Rest Std Y,Rest Std Z,Rest Std U\n")
+        for diag in RPC_std:
+            o.write(str(diag)+",")
+            frs = RPC_std[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    o.write(str(frs[i][j])+",")
+            o.write("\n")
+        
+        o.write("\n")
+        
+        #Relative Energy (RE)
+        o.write("Relative Energy,\nDiagnosis,RE_bat,RE_out,RE_bat(std),RE_out(std)\n")
+        for diag in RE_bat_ave:
+            o.write(str(diag)+",")
+            frs = RE_bat_ave[diag]
+            o.write(str(frs)+",")
+            frs = RE_out_ave[diag]
+            o.write(str(frs)+",")
+            frs = RE_bat_std[diag]
+            o.write(str(frs)+",")
+            frs = RE_out_std[diag]
+            o.write(str(frs)+",")
+            o.write("\n")
+        
+        o.write("\n\n")
+            
+        o.write("Diagnosis,Bat Std X,Bat Std Y,Bat Std Z,Bat Std U,Kin Std X,Kin Std Y,Kin Std Z,Kin Std U,Out Std X,Out Std Y,Out Std Z,Out Std U,Rest Std X,Rest Std Y,Rest Std Z,Rest Std U\n")
+        for diag in RPC_std:
+            o.write(str(diag)+",")
+            frs = RPC_std[diag]
+            for i in range(len(frs)):
+                for j in range(len(frs[i])):
+                    o.write(str(frs[i][j])+",")
+            o.write("\n")
+        
+        o.write("\n")
+        
+        #Control
+        o.write("\nControl,Bat Average X_freq,Bat Average Y_freq,Bat Average Z_freq,Bat Average U_freq,Kin Average X_freq,Kin Average Y_freq,Kin Average Z_freq,Kin Average U_freq,Out Average X_freq,Out Average Y_freq,Out Average Z_freq,Out Average U_freq,Rest Average X_freq,Rest Average Y_freq,Rest Average Z_freq,Rest Average U_freq\n")
+        o.write("Control,")
+        frs = freq_ave_control
+        for i in range(len(frs)):
+            for j in range(len(frs[i])):
+                o.write(str(frs[i][j])+",")
+        o.write("\n")
+        
+        o.write("\n")
+        
+        o.write("\nControl,Bat Std X_freq,Bat Std Y_freq,Bat Std Z_freq,Bat Std U_freq,Kin Std X_freq,Kin Std Y_freq,Kin Std Z_freq,Kin Std U_freq,Out Std X_freq,Out Std Y_freq,Out Std Z_freq,Out Std U_freq,Rest Std X_freq,Rest Std Y_freq,Rest Std Z_freq,Rest Std U_freq\n")
+        o.write("Control,")
+        frs = freq_std_control
+        for i in range(len(frs)):
+            for j in range(len(frs[i])):
+                o.write(str(frs[i][j])+",")
+        o.write("\n")
+        
+        o.write("\n")
+        
+        #Write peak data:
+        for diag in freq_list:
+            peakX_ave = peakX_sorted_ave[diag]
+            peakX_std = peakX_sorted_std[diag]
+            peakX_num = peakX_sorted_num[diag]
+            peakY_ave = peakY_sorted_ave[diag]
+            peakY_std = peakY_sorted_std[diag]
+            peakY_num = peakY_sorted_num[diag]
+            peakZ_ave = peakZ_sorted_ave[diag]
+            peakZ_std = peakZ_sorted_std[diag]
+            peakZ_num = peakZ_sorted_num[diag]
+            peakU_ave = peakU_sorted_ave[diag]
+            peakU_std = peakU_sorted_std[diag]
+            peakU_num = peakU_sorted_num[diag]
+            o.write("\n"+ diag+" Average Peak Data,,,,,,"+diag+" Std Peak Data")
+            for i in range(len(peakX_ave)):
+                tremor = tremor_types[i]
+                o.write("\n"+tremor+":")
+                o.write("\nPeak #,num peaks X,p_startX,p_endX,p_maxX,Power at Max X,Peak Area X,p_widthX,p_startX (std),p_endX (std),p_maxX (std),Power at Max X (std),Peak Area X (std),p_widthX (std),")
+                o.write("num peaks Y,p_startY,p_endY,p_maxY,Power at Max Y,Peak Area Y,p_widthY,p_startY (std),p_endY (std),p_maxY (std),Power at Max Y (std),Peak Area Y (std),p_widthY (std),")
+                o.write("num peaks Z,p_startZ,p_endZ,p_maxZ,Power at Max Z,Peak Area Z,p_widthZ,p_startZ (std),p_endZ (std),p_maxZ (std),Power at Max Z (std),Peak Area Z (std),p_widthZ (std),")
+                o.write("num peaks U,p_startU,p_endU,p_maxU,Power at Max U,Peak Area U,p_widthU,p_startU (std),p_endU (std),p_maxU (std),Power at Max U (std),Peak Area U (std),p_widthU (std),\n")
+                
+                maxNumPeaks = max(len(peakX_ave[i]),len(peakY_ave[i]),len(peakZ_ave[i]),len(peakU_ave[i])) #to determine how many rows needed for max number of peaks
+                for j in range(maxNumPeaks):
+                    o.write(str(j+1)+",");
+                    
+                    if j >= len(peakX_ave[i]):
+                        for k in range(13):
+                            o.write(",")
+                    else:
+                        o.write(str(peakX_num[i][j])+",")
+                        for k in range(6):
+                            o.write(str(peakX_ave[i][j][k]) + ",")
+                        for k in range(6):
+                            o.write(str(peakX_std[i][j][k]) + ",")
+                    
+                    if j >= len(peakY_ave[i]):
+                        for k in range(13):
+                            o.write(",")
+                    else:
+                        o.write(str(peakY_num[i][j])+",")
+                        for k in range(6):
+                            o.write(str(peakY_ave[i][j][k]) + ",")
+                        for k in range(6):
+                            o.write(str(peakY_std[i][j][k]) + ",")
+                    
+                    if j >= len(peakZ_ave[i]):
+                        for k in range(13):
+                            o.write(",")
+                    else:
+                        o.write(str(peakZ_num[i][j])+",")
+                        for k in range(6):
+                            o.write(str(peakZ_ave[i][j][k]) + ",")
+                        for k in range(6):
+                            o.write(str(peakZ_std[i][j][k]) + ",")
+                    
+                    #'u' (composite) peak info
+                    if j >= len(peakU_ave[i]):
+                        for k in range(13):
+                            o.write(",")
+                    else:
+                        o.write(str(peakU_num[i][j])+",")
+                        for k in range(6):
+                            o.write(str(peakU_ave[i][j][k]) + ",")
+                        for k in range(6):
+                            o.write(str(peakU_std[i][j][k]) + ",")
+                    o.write("\n")
+                o.write("\n")
+        
 
-#Save data to file (pickle it)
-pickle.dump(peakU_sorted, open( "peakU_sorted.p", "wb" ) )
-pickle.dump(RPC_list, open( "RPC_list.p", "wb") )
+    #Save data to file (pickle it)
+    pickle.dump(peakU_sorted, open( "peakU_sorted.p", "wb" ) )
+    pickle.dump(RPC_list, open( "RPC_list.p", "wb") )
 
 
-#peakU_delete = pickle.load(open( "peakU_sorted.p", "rb" ))
+    #peakU_delete = pickle.load(open( "peakU_sorted.p", "rb" ))
 
 
 
 
 
-    
+        
