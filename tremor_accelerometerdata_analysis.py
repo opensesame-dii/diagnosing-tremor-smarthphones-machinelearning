@@ -471,6 +471,7 @@ def timeseries_analysis(file_path, display_tremor,setFreqRange):
 #Function to conduct frequency-power spectrum analysis on each file
 def freq_analysis(file_path):
     f = open(file_path)
+    line = f.readline()
     
     peak_slope = 0.5
     min_pow = 0.02
