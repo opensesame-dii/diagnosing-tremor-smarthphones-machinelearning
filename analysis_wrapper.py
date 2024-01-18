@@ -1,16 +1,15 @@
 import os
-import pandas as pd
 import datetime
+import csv
 from tremor_accelerometerdata_analysis import freq_analysis, timeseries_analysis
 from data_conversion import search_csv
-import csv
 
 
     #freq_analysis(os.path.join("var", "data-20240115101744-converted", "sample1", "Sample1a.csv"))
 def analysis(input_file, analyzed_file):
-    with open(f'{input_file}_timeseries_analysis', 'w') as f_a:
+    with open(f'{input_file}_timeseries_analysis', 'w') as f_t:
         timeseries_result = timeseries_analysis(input_file, False, False)
-        print(timeseries_result, file = f_a)
+        print(timeseries_result, file = f_t)
     
     with open(f'{input_file}_freq_analysis', 'w') as f_f:
         freq_result = freq_analysis(input_file)
@@ -18,8 +17,8 @@ def analysis(input_file, analyzed_file):
     #値をcsvに書き出し
     with open(analyzed_file ,"w") as v:
         writer = csv.writer(v)
-        writer.writerow(["filename","RPC","TSI","ASI","MIPA","SDIPA"])
-        writer.writerow([input_file,freq_result[9],timeseries_result[3],timeseries_result[7],timeseries_result[9],timeseries_result[10]])
+        writer.writerow(["filename","RPC_x","RPC_y","RPC_z","RPC_u","TSI","ASI","MIPA","SDIPA"])
+        writer.writerow([input_file,freq_result[9][0],freq_result[9][1],freq_result[9][2],freq_result[9][3],timeseries_result[3],timeseries_result[7],timeseries_result[9],timeseries_result[10]])
         #print("filename",input_file,"\nTSI", timeseries_result[3],"\nASI", timeseries_result[7],"\nMIPA", timeseries_result[9],"\nSDIPA", timeseries_result[10],"\nRPC", freq_result[9])
     return
 
@@ -45,6 +44,7 @@ def analysis_all_in_dir(input_dir, output_dir):
         for files in csv_files:
             analysis(os.path.join(input_dir,f,files), os.path.join(new_dir, files))
     return
+
 
 if __name__ == "__main__":
     input_dir = os.path.join("var", "data-20240117154134-converted")
