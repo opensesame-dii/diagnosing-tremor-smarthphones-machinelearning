@@ -18,21 +18,19 @@ def analysis_all_in_dir(input_dir, output_dir):
     files_dir = [
     f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))
     ]
-    print(files_dir)
     # output_dirを作る
     os.mkdir(output_dir)
+    with open(os.path.join(output_dir,"2022arjun_analysis.csv"), 'w') as v:
+        writer = csv.writer(v)
+        writer.writerow(["filename","RPC_x","RPC_y","RPC_z","RPC_u","TSI","ASI","MIPA","SDIPA"])
     # ディレクトリの各々に対してループ廻す
-    for f in files_dir:
-        # output_dirの中に，ディレクトリを作る
-        new_dir = os.path.join(output_dir,f)
-        os.mkdir(new_dir)
-
-        # {input_dir}/{f} の中のcsvを全て取得する
-        csv_files = search_csv(os.path.join(input_dir, f))
-        print(csv_files)
-        # analyze
-        for files in csv_files:
-            analysis(os.path.join(input_dir,f,files), os.path.join(new_dir, files))
+        for f in files_dir:
+            # {input_dir}/{f} の中のcsvを全て取得する
+            csv_files = search_csv(os.path.join(input_dir, f))
+             # analyze
+            for files in csv_files:
+                result = analysis(os.path.join(input_dir,f,files))
+                print(result, file = v)
     return
 
 
