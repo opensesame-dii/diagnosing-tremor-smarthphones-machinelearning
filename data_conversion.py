@@ -20,7 +20,7 @@ def convert(input_file,converted_file):
     df3 = df2[::4]
 
     #上に10行追加←これだとヘッダーの下に追加される
-    empty_row = pd.DataFrame([['']*len(df3.columns)],columns = df3.columns)
+    empty_row = pd.DataFrame([['a']*len(df3.columns)],columns = df3.columns)
     for i in range(1,11):
         df3 = pd.concat([empty_row,df3],ignore_index=True)
 
