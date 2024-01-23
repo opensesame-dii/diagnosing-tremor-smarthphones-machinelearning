@@ -13,14 +13,13 @@ def analysis(input_file):
     return(analyzed_result)
 
 
-def analysis_all_in_dir(input_dir, output_dir):
+def analysis_all_in_dir(input_dir, output_file):
     # input_dirの中にあるディレクトリの一覧を取得する
     files_dir = [
     f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))
     ]
-    # output_dirを作る
-    os.mkdir(output_dir)
-    with open(os.path.join(output_dir,"2022arjun_analysis.csv"), 'w') as v:
+    
+    with open(output_file, 'w') as v:
         writer = csv.writer(v)
         writer.writerow(["filename","RPC_x","RPC_y","RPC_z","RPC_u","TSI","ASI","MIPA","SDIPA"])
     # ディレクトリの各々に対してループ廻す
