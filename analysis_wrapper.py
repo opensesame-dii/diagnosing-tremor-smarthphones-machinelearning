@@ -34,7 +34,5 @@ def analysis_all_in_dir(input_dir, output_file):
 
 
 if __name__ == "__main__":
-    input_dir = os.path.join("var", "data-20240117154134-converted")
-    output_dir = os.path.join("var", f"data-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-analyzed")
-
-    analysis_all_in_dir(input_dir, output_dir)
+    input_dir = sys.argv[1]
+    output_dir = f"{input_dir}-converted"
