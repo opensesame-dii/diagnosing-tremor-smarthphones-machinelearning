@@ -1,7 +1,6 @@
 import os
-import datetime
 import csv
-import sys
+import argparse
 from tremor_accelerometerdata_analysis import freq_analysis, timeseries_analysis
 from data_conversion import search_csv
 from data_conversion import convert_all_in_dir
@@ -33,9 +32,20 @@ def analysis_all_in_dir(input_dir, output_file):
                 print(*result, sep=",", file = v)
     return
 
+def get_args():
+    parser = argparse.ArgumentParser(
+                prog='analysis_wrapper.py', 
+                description='input_dir指定、convertedファイルを残すかどうか', 
+                epilog='end', 
+                add_help=True, 
+                )
+    parser.add_argument("--input_dir")
+    parser.add_argument("--debug", action = "store_true", default = False)
+    return
 
 if __name__ == "__main__":
-    input_dir = sys.argv[1]
+    args = get_args()
+    input_dir = args.input_dir
     output_dir = f"{input_dir}-converted"
     output_file = os.path.join(input_dir,"2022arjun_analysis.csv")
     convert_all_in_dir(input_dir, output_dir)
