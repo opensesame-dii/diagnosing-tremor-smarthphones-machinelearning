@@ -82,25 +82,29 @@ def convert(input_file,converted_file):
 
 
 def convert_all_in_dir(input_dir, output_dir):
-    # output_dirを作る
-    os.mkdir(output_dir)
-    # input_dirの中にあるディレクトリの一覧を取得する
-    files_dir = [
-        f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))
-    ]
-    print(files_dir)
-    # ディレクトリの各々に対してループ廻す
-    for f in files_dir:
-        # output_dirの中に，ディレクトリを作る
-        new_dir = os.path.join(output_dir,f)
-        os.mkdir(new_dir)
+    # ディレクトリが存在しない場合output_dirを作ってconvert
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    
+        # input_dirの中にあるディレクトリの一覧を取得する
+        files_dir = [
+            f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))
+        ]
+        #print(files_dir)
+        # ディレクトリの各々に対してループ廻す
+        for f in files_dir:
+            # output_dirの中に，ディレクトリを作る
+            new_dir = os.path.join(output_dir,f)
+            os.mkdir(new_dir)
 
-        # {input_dir}/{f} の中のcsvを全て取得する
-        csv_files = search_csv(os.path.join(input_dir, f))
-        print(csv_files)
-        # ↑のそれぞれをconvertする
-        for files in csv_files:
-            convert(os.path.join(input_dir,f,files), os.path.join(new_dir, files))
+            # {input_dir}/{f} の中のcsvを全て取得する
+            csv_files = search_csv(os.path.join(input_dir, f))
+            #print(csv_files)
+            # ↑のそれぞれをconvertする
+            for files in csv_files:
+                convert(os.path.join(input_dir,f,files), os.path.join(new_dir, files))
+    else:
+        print("already exist")
 
     return
 
