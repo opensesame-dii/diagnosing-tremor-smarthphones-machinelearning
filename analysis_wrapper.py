@@ -1,6 +1,7 @@
 import os
 import csv
 import argparse
+import shutil
 from tremor_accelerometerdata_analysis import freq_analysis, timeseries_analysis
 from data_conversion import search_csv
 from data_conversion import convert_all_in_dir
@@ -50,3 +51,5 @@ if __name__ == "__main__":
     output_file = os.path.join(input_dir,"2022arjun_analysis.csv")
     convert_all_in_dir(input_dir, output_dir)
     analysis_all_in_dir(output_dir, output_file)
+    if args.debug == False :
+        shutil.rmtree(output_dir)
