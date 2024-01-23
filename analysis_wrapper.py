@@ -1,11 +1,12 @@
 import os
 import datetime
 import csv
+import sys
 from tremor_accelerometerdata_analysis import freq_analysis, timeseries_analysis
 from data_conversion import search_csv
+from data_conversion import convert_all_in_dir
 
 
-    #freq_analysis(os.path.join("var", "data-20240115101744-converted", "sample1", "Sample1a.csv"))
 def analysis(input_file):
     timeseries_result = timeseries_analysis(input_file, False, False)
     freq_result = freq_analysis(input_file)
@@ -29,10 +30,13 @@ def analysis_all_in_dir(input_dir, output_file):
              # analyze
             for files in csv_files:
                 result = analysis(os.path.join(input_dir,f,files))
-                print(result, file = v)
+                print(*result, sep=",", file = v)
     return
 
 
 if __name__ == "__main__":
     input_dir = sys.argv[1]
     output_dir = f"{input_dir}-converted"
+    output_file = os.path.join(input_dir,"2022arjun_analysis.csv")
+    convert_all_in_dir(input_dir, output_dir)
+    analysis_all_in_dir(output_dir, output_file)
