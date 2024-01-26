@@ -15,24 +15,26 @@ def analysis(input_file):
 
 
 def analysis_all_in_dir(input_dir, output_file):
-    
+    #output_fileがなかったら
+    if not os.path.exists(output_dir):
     # input_dirの中にあるディレクトリの一覧を取得する
-    files_dir = [
-    f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))
-    ]
-    
-    with open(output_file, 'w') as v:
-        writer = csv.writer(v)
-        writer.writerow(["filename","RPC_x","RPC_y","RPC_z","RPC_u","TSI","ASI_delta","ASI_IQR","MIPA","SDIPA"])
-    # ディレクトリの各々に対してループ廻す
-        for f in files_dir:
-            # {input_dir}/{f} の中のcsvを全て取得する
-            csv_files = search_csv(os.path.join(input_dir, f))
-             # analyze
-            for files in csv_files:
-                result = analysis(os.path.join(input_dir,f,files))
-                print(*result, sep=",", file = v)
-    return
+        files_dir = [
+        f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))
+        ]
+        
+        with open(output_file, 'w') as v:
+            writer = csv.writer(v)
+            writer.writerow(["filename","RPC_x","RPC_y","RPC_z","RPC_u","TSI","ASI_delta","ASI_IQR","MIPA","SDIPA"])
+        # ディレクトリの各々に対してループ廻す
+            for f in files_dir:
+                # {input_dir}/{f} の中のcsvを全て取得する
+                csv_files = search_csv(os.path.join(input_dir, f))
+                # analyze
+                for files in csv_files:
+                    result = analysis(os.path.join(input_dir,f,files))
+                    print(*result, sep=",", file = v)
+    else:
+        print(f"{output_file} already exist")
 
 def get_args():
     parser = argparse.ArgumentParser(
