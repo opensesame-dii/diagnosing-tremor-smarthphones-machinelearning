@@ -437,7 +437,11 @@ def timeseries_analysis(file_path, display_tremor,setFreqRange):
         delta_peak_power = peak_power[i]-peak_power[i+1]
         delta_peak_powers.append(delta_peak_power)
     delta_peak_powers = np.array(delta_peak_powers)
-    ASI = (np.percentile(delta_peak_powers,75)- np.percentile(delta_peak_powers, 25)).item()
+    ASI_delta = (np.percentile(delta_peak_powers,75)- np.percentile(delta_peak_powers, 25)).item()
+    
+    ASI_IQR = 0
+    fs = np.array(peak_power)
+    ASI_IQR = (np.percentile(fs, 75) - np.percentile(fs, 25)).item()
     
     peakPowAve = average(peak_power)
     peakPowStd = stddev(peak_power,peakPowAve)
@@ -465,7 +469,7 @@ def timeseries_analysis(file_path, display_tremor,setFreqRange):
         #print(delta_fs)
     
     #return [freqs_filtered,delta_fs,f_mean,f_median,TSI,sig_ff,zero2,t]
-    return [freqs_filtered,delta_fs,f_c,TSI,sig_ff,zero2,t,ASI,peak_power,peakPowAve,peakPowStd,maxPow,minPow]
+    return [freqs_filtered,delta_fs,f_c,TSI,sig_ff,zero2,t,ASI_delta,ASI_IQR,peak_power,peakPowAve,peakPowStd,maxPow,minPow]
 
 #######################
 #Function to conduct frequency-power spectrum analysis on each file
