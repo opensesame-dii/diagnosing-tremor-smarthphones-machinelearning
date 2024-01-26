@@ -41,9 +41,10 @@ def get_args():
                 epilog='end', 
                 add_help=True, 
                 )
-    parser.add_argument("--input_dir")
+    parser.add_argument("-d","--input_dir")
     parser.add_argument("--debug", action = "store_true", default = False)
-    return
+    args = parser.parse_args()
+    return(args)
 
 if __name__ == "__main__":
     args = get_args()
