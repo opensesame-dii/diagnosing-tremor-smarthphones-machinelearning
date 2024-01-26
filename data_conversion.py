@@ -104,7 +104,7 @@ def convert_all_in_dir(input_dir, output_dir):
             for files in csv_files:
                 convert(os.path.join(input_dir,f,files), os.path.join(new_dir, files))
     else:
-        print("already exist")
+        print(f"{output_dir}already exist")
 
     return
 
