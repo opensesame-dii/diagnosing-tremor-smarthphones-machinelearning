@@ -16,7 +16,7 @@ def analysis(input_file):
 
 def analysis_all_in_dir(input_dir, output_file):
     #output_fileがなかったら
-    if not os.path.exists(output_dir):
+    if not os.path.exists(output_file):
     # input_dirの中にあるディレクトリの一覧を取得する
         files_dir = [
         f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))
