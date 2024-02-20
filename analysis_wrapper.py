@@ -24,7 +24,7 @@ def analysis_all_in_dir(input_dir, output_file):
         
         with open(output_file, 'w') as v:
             writer = csv.writer(v)
-            writer.writerow(["filename","RPC_x","RPC_y","RPC_z","RPC_u","TSI","ASI_delta","ASI_IQR","MIPA","SDIPA"])
+            writer.writerow(["filename","RPC_x","RPC_y","RPC_z","RPC_u","TSI_arjun","ASI_delta","ASI_IQR","MIPA","SDIPA"])
         # ディレクトリの各々に対してループ廻す
             for f in files_dir:
                 # {input_dir}/{f} の中のcsvを全て取得する
