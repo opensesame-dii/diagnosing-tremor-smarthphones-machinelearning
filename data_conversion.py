@@ -26,21 +26,21 @@ def convert(input_file,converted_file):
 
     #csv ファイル出力
     df3.to_csv(converted_file, float_format = "",header = True, index = False, encoding = "utf-8")
-    
+
     f = open(converted_file)
 
     for i in range(10):
         line = f.readline()
-    
+
     sample_rate = 50
-    
+
     line = f.readline()
 
     t = []
     x = []
     y = []
     z = []
-        
+
     while line != "":
         line = f.readline()
         line = line.strip()
@@ -48,7 +48,7 @@ def convert(input_file,converted_file):
         line_len = len(line_list)
         if line == "" or line_len < 4:
             break
-        
+
         #Obtains the current time and position and stores them in the corresponding arrays
         t_cur = float(line_list[0])
         x_cur = float(line_list[1])
@@ -59,7 +59,7 @@ def convert(input_file,converted_file):
         y.append(y_cur)
         z.append(z_cur)
     f.close()
-    
+
     x = np.array(x)
     y = np.array(y)
     z = np.array(z)
@@ -85,7 +85,7 @@ def convert_all_in_dir(input_dir, output_dir):
     # ディレクトリが存在しない場合output_dirを作ってconvert
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
-    
+
         # input_dirの中にあるディレクトリの一覧を取得する
         files_dir = [
             f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))
