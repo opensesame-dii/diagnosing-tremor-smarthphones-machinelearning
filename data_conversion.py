@@ -25,6 +25,7 @@ def convert(input_file,converted_file):
         df3 = pd.concat([empty_row,df3],ignore_index=True)
 
     #csv ファイル出力
+    os.makedirs(os.path.dirname(converted_file), exist_ok = True)
     df3.to_csv(converted_file, float_format = "",header = True, index = False, encoding = "utf-8")
 
     f = open(converted_file)
@@ -113,7 +114,7 @@ def search_csv(rootdir):
     for root, directories, files in os.walk(rootdir):
         for file in files:
             if(file.endswith(".csv")):
-                file_list.append(file)
+                file_list.append(os.path.relpath(os.path.join(root, file), rootdir))
     return file_list
 
 if __name__ == "__main__":
