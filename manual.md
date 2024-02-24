@@ -9,7 +9,7 @@
 
 ### 実行方法
 - opensesame_diagnosing-tremor-smarthphones-machinelearning ディレクトリのターミナル上で以下のコマンド入力で解析を実行、ファイルを出力   
-    - `python analysis wrapper.py -d 解析対象ディレクトリのpath`  
+    - `python analysis_wrapper.py -d 解析対象ディレクトリのpath`  
 
 - --debug をつけるとconvertされたファイルを含むディレクトリ("解析対象ディレクトリのpath-converted")も出力  
-    - `python analysis wrapper.py -d 解析対象ディレクトリのpath --debug`
+    - `python analysis_wrapper.py -d 解析対象ディレクトリのpath --debug`
